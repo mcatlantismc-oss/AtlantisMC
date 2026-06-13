@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlantis MC</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<header>
+  <a href="index.html" class="logo"><span class="blade">⚔️</span> ATLANTİS MC</a>
+  <nav>
+    <a href="index.html" class="active">ᴀɴᴀ ꜱᴀʏꜰᴀ</a>
+    <a href="oy-verme.html">ᴏʏ ᴠᴇʀᴍᴇ</a>
+    <a href="haberler.html">ʜᴀʙᴇʀʟᴇʀ</a>
+    <a href="hakkimizda.html">ʜᴀᴋᴋɪᴍɪᴢᴅᴀ</a>
+    <a href="iletisim.html">iʟᴇᴛişiᴍ</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card hero">
+    <span class="blade-big">⚔️</span>
+    <h1>ATLANTİS MC</h1>
+    <div class="tagline">ʏᴇɴi ɴᴇꜱiʟ ᴍiɴᴇᴄʀᴀꜰᴛ ᴅᴇɴᴇʏiᴍi</div>
+
+    <div class="ip-box">
+      <span class="ip-text" id="server-ip">atlantis.minecraft.party</span>
+      <button class="copy-btn" onclick="copyIP()">ᴋᴏᴘʏᴀʟᴀ</button>
+    </div>
+
+    <div class="status-box">
+      <div class="status-line">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-sub">Durum kontrol ediliyor...</span>
+      </div>
+      <div class="status-players" id="status-players"></div>
+    </div>
+  </div>
+</main>
+
+<footer>© 2026 Atlantis MC — Tüm hakları saklıdır.</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
