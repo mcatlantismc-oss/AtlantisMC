@@ -1,0 +1,310 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Mukta:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#070f1c;
+  --bg2:#0b1830;
+  --panel:rgba(15,28,48,0.72);
+  --line:rgba(86,170,255,0.18);
+  --accent:#3aa9ff;
+  --accent2:#7fd8ff;
+  --text:#e7f1fb;
+  --text-dim:#9db4cf;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+html,body{
+  min-height:100%;
+  position:relative;
+  font-family:'Mukta',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* Constellation canvas background */
+#bg-canvas{
+  position:absolute;
+  top:0;left:0;
+  width:100%;
+  z-index:-1;
+  background:linear-gradient(180deg, var(--bg) 0%, var(--bg2) 60%, var(--bg) 100%);
+}
+
+/* ===== Header / Nav ===== */
+header{
+  padding:32px 6vw 18px;
+  text-align:center;
+}
+
+.logo{
+  display:inline-flex;
+  align-items:center;
+  gap:14px;
+  font-family:'Cinzel',serif;
+  font-weight:900;
+  font-size:clamp(1.8rem,6vw,2.8rem);
+  letter-spacing:0.08em;
+  color:var(--accent2);
+  text-shadow:0 0 24px rgba(58,169,255,0.55), 0 0 50px rgba(58,169,255,0.25);
+  text-decoration:none;
+}
+.logo .blade{
+  font-size:0.85em;
+  display:inline-block;
+  transform:translateY(-2px);
+}
+
+nav{
+  margin-top:26px;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:14px;
+}
+nav a{
+  display:inline-block;
+  padding:14px 26px;
+  background:rgba(20,38,64,0.55);
+  border:1px solid var(--line);
+  border-radius:14px;
+  color:var(--text);
+  text-decoration:none;
+  font-weight:700;
+  font-size:0.85rem;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  transition:all .25s ease;
+  backdrop-filter:blur(6px);
+}
+nav a:hover, nav a:focus-visible{
+  border-color:var(--accent);
+  color:var(--accent2);
+  box-shadow:0 0 24px rgba(58,169,255,0.25);
+  transform:translateY(-2px);
+}
+nav a.active{
+  border-color:var(--accent);
+  background:rgba(58,169,255,0.12);
+  color:var(--accent2);
+}
+
+/* ===== Main panel ===== */
+main{
+  max-width:760px;
+  margin:40px auto 80px;
+  padding:0 6vw;
+}
+
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:clamp(26px,5vw,46px);
+  backdrop-filter:blur(10px);
+  box-shadow:0 30px 80px -40px rgba(0,0,0,0.7);
+  margin-bottom:28px;
+}
+
+.card h2{
+  font-family:'Cinzel',serif;
+  font-size:clamp(1.3rem,4vw,1.7rem);
+  font-weight:800;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:18px;
+  color:var(--text);
+}
+
+.card p, .card li{
+  color:var(--text-dim);
+  font-size:1rem;
+  line-height:1.85;
+}
+
+/* ===== Hero (index only) ===== */
+.hero{
+  text-align:center;
+  padding:30px 0 10px;
+}
+.hero .blade-big{
+  font-size:clamp(2.4rem,12vw,4.5rem);
+  display:block;
+  margin-bottom:6px;
+  filter:drop-shadow(0 0 30px rgba(58,169,255,0.5));
+}
+.hero h1{
+  font-family:'Cinzel',serif;
+  font-weight:900;
+  font-size:clamp(2.4rem,10vw,4.5rem);
+  letter-spacing:0.06em;
+  color:var(--accent2);
+  text-shadow:0 0 30px rgba(58,169,255,0.5), 0 0 70px rgba(58,169,255,0.25);
+}
+.hero .tagline{
+  margin-top:14px;
+  letter-spacing:0.25em;
+  font-size:0.8rem;
+  font-weight:700;
+  text-transform:uppercase;
+  color:var(--text-dim);
+}
+
+/* IP box */
+.ip-box{
+  margin-top:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.ip-text{
+  font-family:'Cinzel',serif;
+  font-size:clamp(1rem,3.5vw,1.4rem);
+  color:var(--text);
+  letter-spacing:0.04em;
+}
+.copy-btn{
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  color:#06101e;
+  border:none;
+  padding:13px 28px;
+  border-radius:12px;
+  font-weight:800;
+  font-size:0.95rem;
+  cursor:pointer;
+  transition:transform .15s, box-shadow .25s;
+  font-family:'Mukta',sans-serif;
+}
+.copy-btn:hover{transform:translateY(-2px); box-shadow:0 10px 28px -10px rgba(58,169,255,0.6);}
+.copy-btn:active{transform:translateY(0) scale(0.98);}
+
+/* Status box */
+.status-box{
+  margin-top:24px;
+  text-align:center;
+}
+.status-line{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-weight:800;
+  letter-spacing:0.15em;
+  font-size:0.95rem;
+  text-transform:uppercase;
+}
+.dot{
+  width:12px;height:12px;border-radius:50%;
+  background:#57e08c;
+  box-shadow:0 0 0 0 rgba(87,224,140,0.6);
+  animation:pulse 1.8s infinite;
+}
+.dot.off{background:#e0615f; box-shadow:0 0 0 0 rgba(224,97,95,0.6);}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(87,224,140,0.55);}
+  70%{box-shadow:0 0 0 12px rgba(87,224,140,0);}
+  100%{box-shadow:0 0 0 0 rgba(87,224,140,0);}
+}
+.status-sub{
+  margin-top:6px;
+  color:var(--text-dim);
+  font-size:0.95rem;
+}
+.status-players{
+  margin-top:14px;
+  font-size:1.1rem;
+  font-weight:700;
+  color:var(--accent2);
+}
+
+/* ===== Vote buttons ===== */
+.vote-list{display:flex; flex-direction:column; gap:16px; margin-top:8px;}
+.vote-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  padding:20px;
+  border-radius:14px;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  color:#06101e;
+  font-weight:800;
+  font-size:1.05rem;
+  letter-spacing:0.03em;
+  transition:transform .2s, box-shadow .25s;
+}
+.vote-btn:hover, .vote-btn:focus-visible{
+  transform:translateY(-3px);
+  box-shadow:0 16px 36px -14px rgba(58,169,255,0.55);
+}
+
+/* ===== News ===== */
+.news-item{
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--line);
+  border-left:4px solid var(--accent);
+  border-radius:12px;
+  padding:20px 22px;
+  margin-bottom:16px;
+}
+.news-item h3{
+  font-family:'Cinzel',serif;
+  font-size:1.1rem;
+  margin-bottom:8px;
+  color:var(--text);
+}
+.news-item p{margin:0;}
+
+/* ===== Team list ===== */
+.team-list{list-style:none; margin-top:6px;}
+.team-list li{
+  display:flex;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:12px 0;
+  border-bottom:1px solid var(--line);
+}
+.team-list li:last-child{border-bottom:none;}
+.team-role{
+  text-transform:uppercase;
+  letter-spacing:0.18em;
+  font-size:0.78rem;
+  font-weight:700;
+  color:var(--accent2);
+}
+.team-name{
+  font-family:'Cinzel',serif;
+  font-weight:700;
+  color:var(--text);
+}
+
+/* ===== Contact ===== */
+.discord-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  text-decoration:none;
+  background:linear-gradient(135deg,#6f7bff,#4a55d6);
+  color:#fff;
+  padding:20px;
+  border-radius:14px;
+  font-weight:800;
+  font-size:1.05rem;
+  box-shadow:0 16px 40px -16px rgba(90,100,255,0.55);
+  transition:transform .2s;
+}
+.discord-btn:hover, .discord-btn:focus-visible{transform:translateY(-3px) scale(1.01);}
+
+footer{
+  text-align:center;
+  padding:30px 6vw 60px;
+  color:var(--text-dim);
+  font-size:0.85rem;
+}
+
+@media (max-width:480px){
+  nav a{padding:12px 18px; font-size:0.78rem;}
+}
