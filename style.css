@@ -17,17 +17,35 @@ html,body{
   min-height:100%;
   position:relative;
   font-family:'Mukta',sans-serif;
-  background:var(--bg);
   color:var(--text);
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(rgba(127,216,255,0.55) 1.4px, transparent 1.6px),
+    radial-gradient(rgba(58,169,255,0.5) 1.2px, transparent 1.4px),
+    radial-gradient(rgba(224,177,92,0.4) 1px, transparent 1.2px),
+    repeating-linear-gradient(55deg, rgba(110,195,255,0.07) 0px, rgba(110,195,255,0.07) 1px, transparent 1px, transparent 95px),
+    repeating-linear-gradient(-55deg, rgba(127,216,255,0.06) 0px, rgba(127,216,255,0.06) 1px, transparent 1px, transparent 115px),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 55%, var(--bg) 100%);
+  background-size:
+    130px 130px,
+    190px 190px,
+    240px 240px,
+    95px 95px,
+    115px 115px,
+    100% 2400px;
+  background-position:
+    0 0,
+    45px 60px,
+    100px 20px,
+    0 0,
+    0 0,
+    0 0;
+  background-repeat: repeat, repeat, repeat, repeat, repeat, repeat-y;
 }
 
-/* Constellation canvas background */
+/* Old canvas background no longer used */
 #bg-canvas{
-  position:absolute;
-  top:0;left:0;
-  width:100%;
-  z-index:-1;
-  background:linear-gradient(180deg, var(--bg) 0%, var(--bg2) 60%, var(--bg) 100%);
+  display:none;
 }
 
 /* ===== Header / Nav ===== */
@@ -314,4 +332,4 @@ footer{
 
 @media (max-width:480px){
   nav a{padding:12px 18px; font-size:0.78rem;}
-}
+  }
