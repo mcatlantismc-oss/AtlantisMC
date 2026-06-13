@@ -94,9 +94,11 @@
         const d  = Math.sqrt(dx*dx+dy*dy);
         if(d < LINK_DIST){
           // Açık, parlak mavi çizgiler
-          const op = 0.85 * (1 - d / LINK_DIST);
-          ctx.strokeStyle = `rgba(160,225,255,${op.toFixed(3)})`;
-          ctx.lineWidth   = 1.1;
+          const op = 0.95 * (1 - d / LINK_DIST);
+          ctx.strokeStyle = `rgba(100,210,255,${op.toFixed(3)})`;
+          ctx.lineWidth   = 1.4;
+          ctx.shadowColor = 'rgba(80,200,255,0.6)';
+          ctx.shadowBlur  = 6;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -105,6 +107,8 @@
         }
       }
     }
+
+    ctx.shadowBlur = 0;
 
     // Noktalar — parlak glow
     for(const p of points){
