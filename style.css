@@ -23,7 +23,85 @@ html,body{
   overflow-x:hidden;
 }
 
-/* ===== Canvas — tüm sayfanın arkasında, her yerde görünür ===== */
+/* ===== Okyanus arka plan görseli ===== */
+.ocean-bg{
+  position:fixed;
+  inset:0;
+  z-index:0;
+  background:
+    url('IMG_20260613_200112_737.jpg') center center / cover no-repeat;
+  /* Görseli karart ki yazılar okunabilsin ve dark temasıyla uyuşsun */
+  filter: brightness(0.38) saturate(1.1);
+}
+
+/* ===== Su ışığı animasyonu — 3 katman ===== */
+.ocean-bg::before,
+.ocean-bg::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+
+/* Üstten süzülen ana ışık huzmesi */
+.ocean-bg::before{
+  background:
+    radial-gradient(
+      ellipse 30% 55% at 50% -5%,
+      rgba(80,200,255,0.18) 0%,
+      transparent 70%
+    );
+  animation: causticsShift 7s ease-in-out infinite alternate;
+}
+
+/* Sağdan sola süpürülen ikincil ışık */
+.ocean-bg::after{
+  background:
+    radial-gradient(
+      ellipse 18% 40% at 65% -8%,
+      rgba(120,230,255,0.10) 0%,
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 14% 35% at 32% -4%,
+      rgba(60,180,255,0.09) 0%,
+      transparent 60%
+    );
+  animation: causticsShift2 9s ease-in-out infinite alternate;
+}
+
+@keyframes causticsShift{
+  0%  { transform: translateX(-8%) scaleX(0.9); opacity:0.7; }
+  50% { transform: translateX(0%)  scaleX(1.1); opacity:1;   }
+  100%{ transform: translateX(8%)  scaleX(0.95);opacity:0.75;}
+}
+@keyframes causticsShift2{
+  0%  { transform: translateX(6%)  skewX(-3deg); opacity:0.6; }
+  50% { transform: translateX(-4%) skewX(2deg);  opacity:1;   }
+  100%{ transform: translateX(10%) skewX(-2deg); opacity:0.7; }
+}
+
+/* Caustics overlay — dalgalı ışık noktaları (CSS ile) */
+.caustics-layer{
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse 6% 3% at 20% 8%,  rgba(150,230,255,0.07) 0%, transparent 100%),
+    radial-gradient(ellipse 4% 2% at 55% 5%,  rgba(100,210,255,0.06) 0%, transparent 100%),
+    radial-gradient(ellipse 5% 2% at 80% 12%, rgba(140,220,255,0.05) 0%, transparent 100%),
+    radial-gradient(ellipse 3% 2% at 40% 15%, rgba(180,240,255,0.04) 0%, transparent 100%);
+  animation: causticsFloat 5s ease-in-out infinite alternate;
+}
+@keyframes causticsFloat{
+  0%  { transform:translate(0,0) scale(1);    opacity:0.8; }
+  33% { transform:translate(2%,1%) scale(1.05); opacity:1; }
+  66% { transform:translate(-1%,2%) scale(0.97);opacity:0.9;}
+  100%{ transform:translate(1%,-1%) scale(1.03);opacity:0.85;}
+}
+
+/* ===== Canvas — constellation, okyanus üstünde ===== */
 #bg-canvas{
   display:block;
   position:fixed;
@@ -31,14 +109,14 @@ html,body{
   left:0;
   width:100%;
   height:100%;
-  z-index:0;
+  z-index:1;
   pointer-events:none;
 }
 
 /* Tüm içerik canvas'ın üstünde */
 header, main, footer{
   position:relative;
-  z-index:1;
+  z-index:2;
 }
 
 /* ===== Sayfa geçiş animasyonu ===== */
@@ -446,4 +524,4 @@ footer{
 
 @media (max-width:480px){
   nav a{padding:12px 18px; font-size:0.78rem;}
-    }
+  }
