@@ -178,23 +178,51 @@ async function loadServerStatus(){
   const sub = document.getElementById('status-sub');
   const pl  = document.getElementById('status-players');
   if(!dot) return;
-  try{
-    const res  = await fetch('https://api.mcsrvstat.us/3/atlantis.minecraft.party');
-    const data = await res.json();
-    if(data.online){
-      dot.classList.remove('off');
-      sub.textContent = 'Sunucu Aktif';
-      pl.textContent  = `Oyuncu Sayısı: ${data.players?.online??0} / ${data.players?.max??1000}`;
-    } else {
-      dot.classList.add('off');
-      sub.textContent = 'Sunucu Kapalı';
-      pl.textContent  = '';
+
+  // İki API dene, hangisi çalışırsa onu kullan
+  const apis = [
+    {
+      url: 'https://api.mcstatus.io/v2/status/java/atlantis.minecraft.party',
+      parse: d => ({
+        online: d.online,
+        players: d.players?.online ?? 0,
+        max: d.players?.max ?? 1000
+      })
+    },
+    {
+      url: 'https://api.mcsrvstat.us/3/atlantis.minecraft.party',
+      parse: d => ({
+        online: d.online,
+        players: d.players?.online ?? 0,
+        max: d.players?.max ?? 1000
+      })
     }
-  } catch(e){
-    dot.classList.remove('off');
-    sub.textContent = 'Sunucu Aktif';
-    pl.textContent  = 'Oyuncu Sayısı: 0 / 1000';
+  ];
+
+  for(const api of apis){
+    try{
+      const res  = await fetch(api.url, {signal: AbortSignal.timeout(5000)});
+      const data = await res.json();
+      const info = api.parse(data);
+      if(info.online){
+        dot.classList.remove('off');
+        sub.textContent = 'Sunucu Aktif';
+        pl.textContent  = `Oyuncu Sayısı: ${info.players} / ${info.max}`;
+      } else {
+        dot.classList.add('off');
+        sub.textContent = 'Sunucu Kapalı';
+        pl.textContent  = '';
+      }
+      return; // Başarılı, çık
+    } catch(e){
+      continue; // Sonraki API'yi dene
+    }
   }
+
+  // İkisi de olmadı — sunucu aktif varsay
+  dot.classList.remove('off');
+  sub.textContent = 'Sunucu Aktif';
+  pl.textContent  = 'Oyuncu Sayısı: 0 / 1000';
 }
 loadServerStatus();
 setInterval(loadServerStatus, 60000);
@@ -233,3 +261,4 @@ setInterval(loadServerStatus, 60000);
     });
   });
 })();
+     
