@@ -3,7 +3,8 @@
 :root{
   --bg:#070f1c;
   --bg2:#0b1830;
-  --panel:rgba(15,28,48,0.72);
+  --panel:rgba(10,22,42,0.45);
+  --panel-hover:rgba(10,22,42,0.55);
   --line:rgba(86,170,255,0.18);
   --accent:#3aa9ff;
   --accent2:#7fd8ff;
@@ -19,33 +20,41 @@ html,body{
   font-family:'Mukta',sans-serif;
   color:var(--text);
   background-color:var(--bg);
-  background-image:
-    radial-gradient(rgba(127,216,255,0.55) 1.4px, transparent 1.6px),
-    radial-gradient(rgba(58,169,255,0.5) 1.2px, transparent 1.4px),
-    radial-gradient(rgba(224,177,92,0.4) 1px, transparent 1.2px),
-    repeating-linear-gradient(55deg, rgba(110,195,255,0.07) 0px, rgba(110,195,255,0.07) 1px, transparent 1px, transparent 95px),
-    repeating-linear-gradient(-55deg, rgba(127,216,255,0.06) 0px, rgba(127,216,255,0.06) 1px, transparent 1px, transparent 115px),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 55%, var(--bg) 100%);
-  background-size:
-    130px 130px,
-    190px 190px,
-    240px 240px,
-    95px 95px,
-    115px 115px,
-    100% 2400px;
-  background-position:
-    0 0,
-    45px 60px,
-    100px 20px,
-    0 0,
-    0 0,
-    0 0;
-  background-repeat: repeat, repeat, repeat, repeat, repeat, repeat-y;
+  overflow-x:hidden;
 }
 
-/* Old canvas background no longer used */
+/* ===== Canvas — tüm sayfanın arkasında, her yerde görünür ===== */
 #bg-canvas{
-  display:none;
+  display:block;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  z-index:0;
+  pointer-events:none;
+}
+
+/* Tüm içerik canvas'ın üstünde */
+header, main, footer{
+  position:relative;
+  z-index:1;
+}
+
+/* ===== Sayfa geçiş animasyonu ===== */
+@keyframes pageEnter{
+  from{
+    opacity:0;
+    transform:translateY(28px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+.page-wrapper{
+  animation: pageEnter 0.55s cubic-bezier(0.22,1,0.36,1) both;
 }
 
 /* ===== Header / Nav ===== */
@@ -65,6 +74,7 @@ header{
   color:var(--accent2);
   text-shadow:0 0 24px rgba(58,169,255,0.55), 0 0 50px rgba(58,169,255,0.25);
   text-decoration:none;
+  animation: pageEnter 0.5s cubic-bezier(0.22,1,0.36,1) both;
 }
 .logo .blade{
   font-size:0.85em;
@@ -78,11 +88,12 @@ nav{
   flex-wrap:wrap;
   justify-content:center;
   gap:14px;
+  animation: pageEnter 0.5s 0.1s cubic-bezier(0.22,1,0.36,1) both;
 }
 nav a{
   display:inline-block;
   padding:14px 26px;
-  background:rgba(20,38,64,0.55);
+  background:rgba(10,22,42,0.4);
   border:1px solid var(--line);
   border-radius:14px;
   color:var(--text);
@@ -92,17 +103,19 @@ nav a{
   letter-spacing:0.12em;
   text-transform:uppercase;
   transition:all .25s ease;
-  backdrop-filter:blur(6px);
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
 }
 nav a:hover, nav a:focus-visible{
   border-color:var(--accent);
   color:var(--accent2);
   box-shadow:0 0 24px rgba(58,169,255,0.25);
   transform:translateY(-2px);
+  background:rgba(58,169,255,0.08);
 }
 nav a.active{
   border-color:var(--accent);
-  background:rgba(58,169,255,0.12);
+  background:rgba(58,169,255,0.1);
   color:var(--accent2);
 }
 
@@ -113,22 +126,47 @@ main{
   padding:0 6vw;
 }
 
+/* ===== Kart — yarı saydam, çizgiler içinden görünsün ===== */
 .card{
   background:var(--panel);
-  border:1px solid var(--line);
+  border:1px solid rgba(86,170,255,0.22);
   border-radius:22px;
   padding:clamp(26px,5vw,46px);
-  backdrop-filter:blur(10px);
-  box-shadow:0 30px 80px -40px rgba(0,0,0,0.7);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  box-shadow:
+    0 30px 80px -40px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(127,216,255,0.08);
   margin-bottom:28px;
+
+  /* Scroll reveal başlangıç durumu */
   opacity:0;
-  transform:translateY(24px);
-  transition:opacity .7s ease, transform .7s ease;
+  transform:translateY(32px);
+  transition:
+    opacity 0.65s cubic-bezier(0.22,1,0.36,1),
+    transform 0.65s cubic-bezier(0.22,1,0.36,1),
+    background 0.3s ease,
+    box-shadow 0.3s ease;
 }
+
+.card:hover{
+  background:var(--panel-hover);
+  box-shadow:
+    0 30px 80px -30px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(58,169,255,0.15),
+    inset 0 1px 0 rgba(127,216,255,0.12);
+}
+
 .card.in-view{
   opacity:1;
   transform:translateY(0);
 }
+
+/* Staggered delay for multiple cards */
+.card:nth-child(1){ transition-delay: 0s; }
+.card:nth-child(2){ transition-delay: 0.12s; }
+.card:nth-child(3){ transition-delay: 0.24s; }
+.card:nth-child(4){ transition-delay: 0.36s; }
 
 .card h2{
   font-family:'Cinzel',serif;
@@ -157,7 +195,14 @@ main{
   display:block;
   margin-bottom:6px;
   filter:drop-shadow(0 0 30px rgba(58,169,255,0.5));
+  animation: floatBlade 3s ease-in-out infinite;
 }
+
+@keyframes floatBlade{
+  0%,100%{ transform:translateY(0) rotate(0deg); }
+  50%{ transform:translateY(-6px) rotate(3deg); }
+}
+
 .hero h1{
   font-family:'Cinzel',serif;
   font-weight:900;
@@ -272,6 +317,11 @@ main{
   border-radius:12px;
   padding:20px 22px;
   margin-bottom:16px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.news-item:hover{
+  background:rgba(58,169,255,0.05);
+  border-left-color:var(--accent2);
 }
 .news-item h3{
   font-family:'Cinzel',serif;
@@ -290,6 +340,10 @@ main{
   gap:6px;
   padding:12px 0;
   border-bottom:1px solid var(--line);
+  transition: padding-left 0.2s;
+}
+.team-list li:hover{
+  padding-left:8px;
 }
 .team-list li:last-child{border-bottom:none;}
 .team-role{
@@ -319,17 +373,30 @@ main{
   font-weight:800;
   font-size:1.05rem;
   box-shadow:0 16px 40px -16px rgba(90,100,255,0.55);
-  transition:transform .2s;
+  transition:transform .2s, box-shadow 0.25s;
 }
-.discord-btn:hover, .discord-btn:focus-visible{transform:translateY(-3px) scale(1.01);}
+.discord-btn:hover, .discord-btn:focus-visible{
+  transform:translateY(-3px) scale(1.01);
+  box-shadow:0 22px 48px -16px rgba(90,100,255,0.7);
+}
 
 footer{
   text-align:center;
   padding:30px 6vw 60px;
   color:var(--text-dim);
   font-size:0.85rem;
+  position:relative;
+  z-index:1;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:0.01ms !important;
+    transition-duration:0.01ms !important;
+  }
 }
 
 @media (max-width:480px){
   nav a{padding:12px 18px; font-size:0.78rem;}
-  }
+}
