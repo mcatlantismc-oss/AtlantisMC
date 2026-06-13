@@ -1,16 +1,9 @@
 /* ===== Sayfa geçiş animasyonu ===== */
 (function(){
-  // Tüm içeriği page-wrapper'a sar (body'nin doğrudan çocukları hariç canvas)
   document.addEventListener('DOMContentLoaded', function(){
-    const wrapper = document.querySelector('.page-wrapper');
-    if(wrapper){
-      wrapper.classList.add('loaded');
-    }
-
     // Sayfa tıklamada çıkış animasyonu
     document.querySelectorAll('a[href]').forEach(link => {
       const href = link.getAttribute('href');
-      // Sadece aynı sitedeki linkler, yeni sekme açmayanlar
       if(
         href &&
         !href.startsWith('http') &&
@@ -21,47 +14,103 @@
         link.addEventListener('click', function(e){
           e.preventDefault();
           const dest = this.href;
-          document.body.style.transition = 'opacity 0.25s ease';
+          document.body.style.transition = 'opacity 0.22s ease';
           document.body.style.opacity = '0';
-          setTimeout(()=>{ window.location.href = dest; }, 260);
+          setTimeout(()=>{ window.location.href = dest; }, 230);
         });
       }
     });
   });
 })();
 
-/* ===== Constellation canvas arka planı ===== */
+/* ===== Constellation canvas — sayfadan sayfaya sabit ===== */
 (function(){
   const canvas = document.getElementById('bg-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
   let w, h, points;
+  let animId;
 
+  // Renkler
   const colors = [
-    [58,169,255],   // accent blue
-    [127,216,255],  // light cyan
+    [58,169,255],   // mavi
+    [127,216,255],  // açık cyan
     [120,140,255],  // periwinkle
-    [224,177,92]    // gold spark
+    [224,177,92]    // altın
   ];
 
-  function resize(){
-    w = canvas.width  = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    const count = Math.min(200, Math.floor((w * h) / 8000));
-    points = Array.from({length: count}, () => ({
+  // Nokta sayısı — daha az, daha temiz
+  const TARGET_COUNT = 70;
+  // Bağlantı mesafesi — kısaltıldı, iç içe geçme azalır
+  const LINK_DIST = 130;
+  // Her nokta max kaç bağlantı yapabilir
+  const MAX_LINKS_PER_NODE = 3;
+
+  /* -- sessionStorage'dan noktaları yükle ya da yeni oluştur -- */
+  function loadOrCreatePoints(w, h){
+    try {
+      const saved = sessionStorage.getItem('atl_pts');
+      if(saved){
+        const data = JSON.parse(saved);
+        // Ekran boyutu değiştiyse normalize et
+        const scaleX = w / (data.w || w);
+        const scaleY = h / (data.h || h);
+        return data.pts.map(p => ({
+          x:  p.x * scaleX,
+          y:  p.y * scaleY,
+          vx: p.vx,
+          vy: p.vy,
+          r:  p.r,
+          c:  p.c
+        }));
+      }
+    } catch(e){}
+    // Yoksa yeni oluştur
+    return Array.from({length: TARGET_COUNT}, () => ({
       x:  Math.random() * w,
       y:  Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: (Math.random() - 0.5) * 0.35,
-      r:  Math.random() * 1.6 + 0.8,
+      vx: (Math.random() - 0.5) * 0.28,
+      vy: (Math.random() - 0.5) * 0.28,
+      r:  Math.random() * 1.4 + 0.7,
       c:  colors[Math.floor(Math.random() * colors.length)]
     }));
+  }
+
+  /* -- Noktaları sessionStorage'a kaydet -- */
+  let saveTimer;
+  function savePoints(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        sessionStorage.setItem('atl_pts', JSON.stringify({
+          w, h,
+          pts: points.map(p => ({
+            x: p.x, y: p.y,
+            vx: p.vx, vy: p.vy,
+            r: p.r, c: p.c
+          }))
+        }));
+      } catch(e){}
+    }, 800);
+  }
+
+  function resize(){
+    const newW = window.innerWidth;
+    const newH = window.innerHeight;
+    if(w === newW && h === newH) return;
+    w = canvas.width  = newW;
+    h = canvas.height = newH;
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    if(!points){
+      points = loadOrCreatePoints(w, h);
+    }
   }
 
   function step(){
     ctx.clearRect(0, 0, w, h);
 
-    // Nokta hareketleri
+    // Hareket
     for(const p of points){
       p.x += p.vx;
       p.y += p.vy;
@@ -69,40 +118,56 @@
       if(p.y < 0 || p.y > h) p.vy *= -1;
     }
 
-    // Çizgiler
+    // Çizgiler — her nokta max MAX_LINKS_PER_NODE bağlantı yapar
     for(let i = 0; i < points.length; i++){
+      let linkCount = 0;
       for(let j = i + 1; j < points.length; j++){
+        if(linkCount >= MAX_LINKS_PER_NODE) break;
         const a = points[i], b = points[j];
         const dx = a.x - b.x, dy = a.y - b.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        if(dist < 180){
-          const op = 0.55 * (1 - dist / 180);
-          ctx.strokeStyle = `rgba(110,195,255,${op})`;
-          ctx.lineWidth = 0.9;
+        if(dist < LINK_DIST){
+          const op = 0.45 * (1 - dist / LINK_DIST);
+          ctx.strokeStyle = `rgba(110,195,255,${op.toFixed(3)})`;
+          ctx.lineWidth = 0.8;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
           ctx.stroke();
+          linkCount++;
         }
       }
     }
 
-    // Noktalar (parlaklıkla)
+    // Noktalar
     for(const p of points){
       const [r,g,b] = p.c;
-      ctx.fillStyle   = `rgba(${r},${g},${b},0.95)`;
-      ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
-      ctx.shadowBlur  = 8;
+      ctx.fillStyle   = `rgba(${r},${g},${b},0.9)`;
+      ctx.shadowColor = `rgba(${r},${g},${b},0.7)`;
+      ctx.shadowBlur  = 7;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.shadowBlur = 0;
 
-    requestAnimationFrame(step);
+    // Her 120 frame'de bir kaydet (~2 sn)
+    if(!step._frame) step._frame = 0;
+    if(++step._frame % 120 === 0) savePoints();
+
+    animId = requestAnimationFrame(step);
   }
 
-  window.addEventListener('resize', resize);
+  // Sayfa kapatılırken kaydet
+  window.addEventListener('beforeunload', savePoints);
+  window.addEventListener('pagehide', savePoints);
+
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(animId);
+    resize();
+    animId = requestAnimationFrame(step);
+  });
+
   resize();
   step();
 })();
@@ -159,11 +224,9 @@ setInterval(loadServerStatus, 60000);
 (function(){
   const cards = document.querySelectorAll('.card');
   if(!cards.length) return;
-
   const obs = new IntersectionObserver((entries) => {
-    entries.forEach((e, i) => {
+    entries.forEach(e => {
       if(e.isIntersecting){
-        // Her kart için biraz farklı gecikme
         const delay = e.target.dataset.delay || 0;
         setTimeout(() => {
           e.target.classList.add('in-view');
@@ -172,7 +235,6 @@ setInterval(loadServerStatus, 60000);
       }
     });
   }, { threshold: 0.12 });
-
   cards.forEach((c, i) => {
     c.dataset.delay = i * 130;
     obs.observe(c);
