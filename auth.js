@@ -1,9 +1,10 @@
-/* Atlantis MC — güvenli hesap, Google, e-posta OTP ve rol arayüzü */
+/* Atlantis MC — hesap, Google, e-posta OTP, profil ve rol arayüzü */
 (function(){
   'use strict';
 
   const cfg = window.ATLANTIS_SUPABASE || {};
-  const configuredEdgeUrl = String(window.ATLANTIS_EDGE_URL || '').replace(/\/+$/, '');
+  const configuredEdgeUrl =
+    String(window.ATLANTIS_EDGE_URL || '').replace(/\/+$/, '');
 
   const NAME_REGEX =
     /^[A-Za-zÇĞİÖŞÜçğıöşü][A-Za-zÇĞİÖŞÜçğıöşü0-9]{2,15}$/;
@@ -22,20 +23,25 @@
     return;
   }
 
+  let clientPromise = null;
+  let resendTimer = null;
+  let resendSeconds = 0;
+
   function boot(){
     if(!window.supabase) return null;
 
-    const client = window.supabase.createClient(
-      cfg.url,
-      cfg.publishableKey,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
+    const client =
+      window.supabase.createClient(
+        cfg.url,
+        cfg.publishableKey,
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
         }
-      }
-    );
+      );
 
     window.atlantisSupabase = client;
     return client;
@@ -53,29 +59,6 @@
     }
   });
 
-  const esc = value =>
-    String(value ?? '').replace(
-      /[&<>"']/g,
-      ch => ({
-        '&':'&amp;',
-        '<':'&lt;',
-        '>':'&gt;',
-        '"':'&quot;',
-        "'":'&#039;'
-      }[ch])
-    );
-
-  /*
-   * Edge Function adresini otomatik tamamlar.
-   *
-   * Desteklenen iki format:
-   *
-   * https://PROJECT.supabase.co/functions/v1
-   *
-   * veya
-   *
-   * https://PROJECT.supabase.co/functions/v1/login-with-identifier
-   */
   function getLoginEndpoint(){
     if(!configuredEdgeUrl) return '';
 
@@ -91,13 +74,18 @@
       '/login-with-identifier';
   }
 
-  /*
-   * Bazı CSS dosyaları HTML'in [hidden] özelliğini
-   * yanlışlıkla geçersiz kılabiliyor.
-   *
-   * Bu kural formların yalnızca seçilenini
-   * göstermeyi garanti eder.
-   */
+  const esc = value =>
+    String(value ?? '').replace(
+      /[&<>"']/g,
+      ch => ({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":'&#039;'
+      }[ch])
+    );
+
   function injectVisibilityFix(){
     if(
       document.getElementById(
@@ -115,7 +103,8 @@
 
     style.textContent = `
       #auth-modal[hidden],
-      #auth-modal .auth-form[hidden] {
+      #auth-modal .auth-form[hidden],
+      #auth-modal .auth-tabs[hidden] {
         display: none !important;
       }
 
@@ -123,8 +112,107 @@
         display: grid;
       }
 
-      #auth-modal .auth-tabs[hidden] {
-        display: none !important;
+      #auth-modal .auth-helper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: -2px;
+      }
+
+      #auth-modal .auth-password-wrap {
+        position: relative;
+      }
+
+      #auth-modal .auth-password-wrap input {
+        padding-right: 82px;
+      }
+
+      #auth-modal .auth-password-toggle {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        border: 0;
+        background: transparent;
+        color: #9fdcff;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        padding: 7px 8px;
+      }
+
+      #auth-modal .password-strength {
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.08);
+        overflow: hidden;
+        margin-top: -3px;
+      }
+
+      #auth-modal .password-strength > span {
+        display: block;
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        transition: width .2s ease;
+      }
+
+      #auth-modal .otp-input {
+        text-align: center;
+        letter-spacing: .45em;
+        padding-left: .45em;
+        font-weight: 800;
+        font-size: 24px;
+      }
+
+      #auth-modal .otp-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-top: -4px;
+      }
+
+      #auth-modal .otp-resend {
+        border: 0;
+        background: transparent;
+        color: #87d5ff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+        padding: 4px 0;
+      }
+
+      #auth-modal .otp-resend:disabled {
+        opacity: .45;
+        cursor: default;
+      }
+
+      #auth-modal .auth-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        align-self: center;
+        margin: 0 auto 10px;
+        padding: 7px 11px;
+        border: 1px solid rgba(112,205,255,.22);
+        border-radius: 999px;
+        background: rgba(52,146,205,.08);
+        color: #a9dfff;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+
+      #auth-modal .auth-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #70d5ff;
+        box-shadow: 0 0 12px rgba(112,213,255,.85);
       }
     `;
 
@@ -133,7 +221,9 @@
 
   function ensureUI(){
     if(
-      document.getElementById('auth-modal')
+      document.getElementById(
+        'auth-modal'
+      )
     ){
       return;
     }
@@ -141,7 +231,9 @@
     injectVisibilityFix();
 
     const nav =
-      document.querySelector('.site-nav');
+      document.querySelector(
+        '.site-nav'
+      );
 
     if(
       nav &&
@@ -255,14 +347,24 @@
           <label>
             Şifre
 
-            <input
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              required
-              minlength="8"
-              placeholder="Şifren"
-            >
+            <div class="auth-password-wrap">
+              <input
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                minlength="8"
+                placeholder="Şifren"
+              >
+
+              <button
+                type="button"
+                class="auth-password-toggle"
+                data-toggle-password
+              >
+                Göster
+              </button>
+            </div>
           </label>
 
           <button
@@ -334,15 +436,32 @@
           <label>
             Şifre
 
-            <input
-              name="password"
-              type="password"
-              autocomplete="new-password"
-              required
-              minlength="8"
-              placeholder="En az 8 karakter"
-            >
+            <div class="auth-password-wrap">
+              <input
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                required
+                minlength="8"
+                placeholder="En az 8 karakter"
+              >
+
+              <button
+                type="button"
+                class="auth-password-toggle"
+                data-toggle-password
+              >
+                Göster
+              </button>
+            </div>
           </label>
+
+          <div
+            class="password-strength"
+            aria-hidden="true"
+          >
+            <span></span>
+          </div>
 
           <button
             class="primary-button wide"
@@ -370,6 +489,11 @@
           class="auth-form"
           hidden
         >
+
+          <div class="auth-badge">
+            <span class="auth-dot"></span>
+            Atlantis MC Güvenli Kurtarma
+          </div>
 
           <label>
             Gmail / E-posta
@@ -416,6 +540,7 @@
 
             <input
               name="token"
+              class="otp-input"
               inputmode="numeric"
               autocomplete="one-time-code"
               pattern="[0-9]{6}"
@@ -424,6 +549,20 @@
               placeholder="123456"
             >
           </label>
+
+          <div class="otp-toolbar">
+            <span
+              id="otp-countdown"
+            ></span>
+
+            <button
+              type="button"
+              class="otp-resend"
+              id="otp-resend"
+            >
+              Kodu tekrar gönder
+            </button>
+          </div>
 
           <button
             class="primary-button wide"
@@ -451,27 +590,47 @@
           <label>
             Yeni şifre
 
-            <input
-              name="password"
-              type="password"
-              autocomplete="new-password"
-              minlength="8"
-              required
-              placeholder="Yeni şifre"
-            >
+            <div class="auth-password-wrap">
+              <input
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                placeholder="Yeni şifre"
+              >
+
+              <button
+                type="button"
+                class="auth-password-toggle"
+                data-toggle-password
+              >
+                Göster
+              </button>
+            </div>
           </label>
 
           <label>
             Yeni şifre tekrar
 
-            <input
-              name="password2"
-              type="password"
-              autocomplete="new-password"
-              minlength="8"
-              required
-              placeholder="Yeni şifre tekrar"
-            >
+            <div class="auth-password-wrap">
+              <input
+                name="password2"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                placeholder="Yeni şifre tekrar"
+              >
+
+              <button
+                type="button"
+                class="auth-password-toggle"
+                data-toggle-password
+              >
+                Göster
+              </button>
+            </div>
           </label>
 
           <button
@@ -521,6 +680,7 @@
           class="auth-message"
           id="auth-message"
           role="status"
+          aria-live="polite"
         ></div>
 
       </section>
@@ -551,6 +711,85 @@
       button.onclick = () =>
         openAuth('login');
     });
+
+    modal.querySelectorAll(
+      '[data-toggle-password]'
+    ).forEach(button => {
+      button.onclick = () => {
+        const input =
+          button
+            .closest('.auth-password-wrap')
+            ?.querySelector('input');
+
+        if(!input) return;
+
+        const visible =
+          input.type === 'text';
+
+        input.type =
+          visible
+            ? 'password'
+            : 'text';
+
+        button.textContent =
+          visible
+            ? 'Göster'
+            : 'Gizle';
+      };
+    });
+
+    const signupPassword =
+      modal.querySelector(
+        '#auth-signup-form input[name="password"]'
+      );
+
+    const strengthBar =
+      modal.querySelector(
+        '.password-strength > span'
+      );
+
+    if(
+      signupPassword &&
+      strengthBar
+    ){
+      signupPassword.addEventListener(
+        'input',
+        () => {
+          const value =
+            signupPassword.value;
+
+          let score = 0;
+
+          if(value.length >= 8){
+            score++;
+          }
+
+          if(value.length >= 12){
+            score++;
+          }
+
+          if(/[A-ZÇĞİÖŞÜ]/.test(value)){
+            score++;
+          }
+
+          if(/[0-9]/.test(value)){
+            score++;
+          }
+
+          if(
+            /[^A-Za-zÇĞİÖŞÜçğıöşü0-9]/.test(value)
+          ){
+            score++;
+          }
+
+          strengthBar.style.width =
+            Math.min(
+              100,
+              score * 20
+            ) + '%';
+        }
+      );
+    }
 
     modal.querySelector(
       '#forgot-password'
@@ -588,6 +827,10 @@
     modal.querySelector(
       '#auth-complete-form'
     ).onsubmit = completeProfile;
+
+    modal.querySelector(
+      '#otp-resend'
+    ).onclick = resendOtp;
   }
 
   function setMessage(
@@ -606,6 +849,91 @@
 
     el.className =
       'auth-message ' + kind;
+  }
+
+  function startResendTimer(){
+    clearInterval(
+      resendTimer
+    );
+
+    resendSeconds = 60;
+
+    const button =
+      document.getElementById(
+        'otp-resend'
+      );
+
+    const countdown =
+      document.getElementById(
+        'otp-countdown'
+      );
+
+    if(button){
+      button.disabled = true;
+    }
+
+    const tick = () => {
+      if(countdown){
+        countdown.textContent =
+          resendSeconds > 0
+            ? `${resendSeconds} sn`
+            : '';
+      }
+
+      if(
+        resendSeconds <= 0
+      ){
+        clearInterval(
+          resendTimer
+        );
+
+        if(button){
+          button.disabled = false;
+        }
+
+        if(countdown){
+          countdown.textContent = '';
+        }
+
+        return;
+      }
+
+      resendSeconds--;
+    };
+
+    tick();
+
+    resendTimer =
+      setInterval(
+        tick,
+        1000
+      );
+  }
+
+  function stopResendTimer(){
+    clearInterval(
+      resendTimer
+    );
+
+    resendTimer = null;
+
+    const button =
+      document.getElementById(
+        'otp-resend'
+      );
+
+    const countdown =
+      document.getElementById(
+        'otp-countdown'
+      );
+
+    if(button){
+      button.disabled = false;
+    }
+
+    if(countdown){
+      countdown.textContent = '';
+    }
   }
 
   function showForm(name){
@@ -641,6 +969,10 @@
       tabs.hidden =
         !['login','signup']
           .includes(name);
+    }
+
+    if(name !== 'otp'){
+      stopResendTimer();
     }
 
     const map = {
@@ -749,118 +1081,114 @@
         'auth-open'
       );
     }
+
+    stopResendTimer();
   }
 
   window.openAtlantisAuth =
     openAuth;
 
   async function getClient(){
-    return await window.atlantisAuthReady;
-  }
-
-  async function googleLogin(){
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
+    if(clientPromise){
+      return clientPromise;
     }
 
-    const {error} =
-      await s.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: location.href
-        }
-      });
+    clientPromise =
+      window.atlantisAuthReady;
 
-    if(error){
-      setMessage(
-        'Google girişi başlatılamadı.',
-        'error'
-      );
-    }
+    return await clientPromise;
   }
-
-  async function login(event){
+    async function login(event){
     event.preventDefault();
 
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
-
-    const data =
-      new FormData(
-        event.currentTarget
-      );
+    const form =
+      event.currentTarget;
 
     const identifier =
       String(
-        data.get('identifier') || ''
+        form.elements.identifier.value || ''
       ).trim();
 
     const password =
       String(
-        data.get('password') || ''
+        form.elements.password.value || ''
       );
 
     if(!identifier || !password){
-      return setMessage(
-        'Bilgilerini eksiksiz doldur.',
+      setMessage(
+        'Kullanıcı adı/e-posta ve şifre gerekli.',
         'error'
       );
-    }
-
-    if(identifier.includes('@')){
-      const {
-        data: result,
-        error
-      } =
-        await s.auth.signInWithPassword({
-          email:
-            identifier.toLowerCase(),
-          password
-        });
-
-      if(error){
-        return setMessage(
-          'E-posta veya şifre hatalı.',
-          'error'
-        );
-      }
-
-      closeAuth();
-
-      await updateNav(
-        result.user
-      );
-
       return;
     }
 
-    const loginEndpoint =
-      getLoginEndpoint();
-
-    if(!loginEndpoint){
-      return setMessage(
-        'Kullanıcı adıyla giriş servisi yapılandırılmamış.',
-        'error'
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
       );
+
+    const oldText =
+      button?.textContent || 'Giriş Yap';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Giriş yapılıyor...';
     }
 
     try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      if(
+        EMAIL_REGEX.test(identifier)
+      ){
+        const {
+          data,
+          error
+        } =
+          await client.auth.signInWithPassword({
+            email: identifier,
+            password
+          });
+
+        if(error){
+          throw new Error(
+            'E-posta veya şifre hatalı.'
+          );
+        }
+
+        if(!data?.session){
+          throw new Error(
+            'Oturum oluşturulamadı.'
+          );
+        }
+
+        await afterLogin(
+          data.session
+        );
+
+        return;
+      }
+
+      const endpoint =
+        getLoginEndpoint();
+
+      if(!endpoint){
+        throw new Error(
+          'Giriş servisi yapılandırılmamış.'
+        );
+      }
+
       const response =
         await fetch(
-          loginEndpoint,
+          endpoint,
           {
             method: 'POST',
 
@@ -872,162 +1200,213 @@
                 cfg.publishableKey
             },
 
-            body:
-              JSON.stringify({
-                username:
-                  identifier,
-                password
-              })
+            body: JSON.stringify({
+              username: identifier,
+              password
+            })
           }
         );
 
-      const result =
-        await response
-          .json()
-          .catch(
-            () => ({})
-          );
+      let result = null;
 
-      if(!response.ok){
+      try{
+        result =
+          await response.json();
+      }catch{
+        result = null;
+      }
+
+      if(
+        !response.ok ||
+        !result?.session
+      ){
         throw new Error(
-          result.error ||
-          'Giriş başarısız.'
+          result?.error ||
+          'Kullanıcı adı veya şifre hatalı.'
         );
       }
 
-      if(!result.session){
-        throw new Error(
-          'Geçerli bir oturum alınamadı.'
-        );
-      }
+      const {
+        error
+      } =
+        await client.auth.setSession({
+          access_token:
+            result.session.access_token,
 
-      const {error} =
-        await s.auth.setSession(
-          result.session
-        );
+          refresh_token:
+            result.session.refresh_token
+        });
 
       if(error){
         throw error;
       }
 
-      closeAuth();
-
-      await updateNav(
-        result.session.user
+      await afterLogin(
+        result.session
       );
 
     }catch(error){
+      console.error(
+        '[Atlantis Auth] login:',
+        error
+      );
+
       setMessage(
-        error.message ||
+        error?.message ||
         'Giriş başarısız.',
         'error'
       );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
     }
   }
-    async function signup(event){
+
+  async function signup(event){
     event.preventDefault();
 
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
-
-    const data =
-      new FormData(
-        event.currentTarget
-      );
+    const form =
+      event.currentTarget;
 
     const username =
       String(
-        data.get('username') || ''
+        form.elements.username.value || ''
       ).trim();
 
     const email =
       String(
-        data.get('email') || ''
+        form.elements.email.value || ''
       )
-        .trim()
-        .toLowerCase();
+      .trim()
+      .toLowerCase();
 
     const password =
       String(
-        data.get('password') || ''
+        form.elements.password.value || ''
       );
 
-    if(!NAME_REGEX.test(username)){
-      return setMessage(
-        'Kullanıcı adı 3–16 karakter olmalı; sadece Türkçe/İngilizce harf ve rakam kullanabilirsin.',
+    if(
+      !NAME_REGEX.test(username)
+    ){
+      setMessage(
+        'Kullanıcı adı 3–16 karakter olmalı; ilk karakter harf olmalı ve boşluk/özel sembol içermemeli.',
         'error'
       );
+      return;
     }
 
-    if(!EMAIL_REGEX.test(email)){
-      return setMessage(
+    if(
+      !EMAIL_REGEX.test(email)
+    ){
+      setMessage(
         'Geçerli bir e-posta adresi gir.',
         'error'
       );
+      return;
     }
 
-    if(password.length < 8){
-      return setMessage(
+    if(
+      password.length < 8
+    ){
+      setMessage(
         'Şifre en az 8 karakter olmalı.',
         'error'
       );
+      return;
+    }
+
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
+      );
+
+    const oldText =
+      button?.textContent || 'Kayıt Ol';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Hesap oluşturuluyor...';
     }
 
     try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
       const {
         data: existing,
-        error: lookupError
+        error: profileError
       } =
-        await s
+        await client
           .from('profiles')
           .select('id')
-          .eq(
+          .ilike(
             'username',
             username
           )
           .maybeSingle();
 
-      if(lookupError){
-        console.error(
-          'Kullanıcı adı kontrolü:',
-          lookupError
+      if(profileError){
+        console.warn(
+          '[Atlantis Auth] profile check:',
+          profileError
         );
       }
 
       if(existing){
-        return setMessage(
-          'Bu kullanıcı adı zaten alınmış.',
-          'error'
+        throw new Error(
+          'Bu kullanıcı adı zaten kullanılıyor.'
         );
       }
 
       const {
-        data: result,
+        data,
         error
       } =
-        await s.auth.signUp({
+        await client.auth.signUp({
           email,
           password,
 
           options: {
-            data: {
-              username
-            }
+            emailRedirectTo:
+              window.location.origin +
+              window.location.pathname
           }
         });
 
       if(error){
-        return setMessage(
-          error.message ||
-          'Kayıt başarısız.',
-          'error'
+        const msg =
+          String(
+            error.message || ''
+          ).toLowerCase();
+
+        if(
+          msg.includes('already') ||
+          msg.includes('registered')
+        ){
+          throw new Error(
+            'Bu e-posta adresi zaten kayıtlı.'
+          );
+        }
+
+        throw new Error(
+          'Kayıt oluşturulamadı. Bilgilerini kontrol et.'
+        );
+      }
+
+      if(!data?.user){
+        throw new Error(
+          'Hesap oluşturulamadı.'
         );
       }
 
@@ -1040,51 +1419,122 @@
       window.atlantisOtpMode =
         'signup';
 
-      /*
-       * E-posta doğrulaması açıksa
-       * Supabase hemen session oluşturmaz.
-       */
-      if(!result.session){
-        showForm('otp');
+      if(data.session){
+        await saveProfile(
+          data.user,
+          username
+        );
 
-        const info =
-          document.getElementById(
-            'otp-info'
-          );
-
-        if(info){
-          info.textContent =
-            email +
-            ' adresine doğrulama kodu gönderildi.';
-        }
-
-        setMessage(
-          'E-posta kutunu kontrol et.',
-          'success'
+        await afterLogin(
+          data.session
         );
 
         return;
       }
 
-      await saveProfile(
-        result.user,
-        username
-      );
+      showForm('otp');
 
-      closeAuth();
+      const info =
+        document.getElementById(
+          'otp-info'
+        );
 
-      await updateNav(
-        result.user
+      if(info){
+        info.textContent =
+          email +
+          ' adresine doğrulama kodu gönderildi.';
+      }
+
+      setMessage(
+        'E-posta kutunu kontrol et.',
+        'success'
       );
 
     }catch(error){
       console.error(
-        'Kayıt hatası:',
+        '[Atlantis Auth] signup:',
         error
       );
 
       setMessage(
+        error?.message ||
         'Kayıt sırasında bir hata oluştu.',
+        'error'
+      );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
+    }
+  }
+
+  async function googleLogin(){
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      setMessage(
+        'Google giriş sayfası açılıyor...',
+        'info'
+      );
+
+      const redirectTo =
+        window.location.origin +
+        window.location.pathname;
+
+      const {
+        error
+      } =
+        await client.auth.signInWithOAuth({
+          provider: 'google',
+
+          options: {
+            redirectTo,
+
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'select_account'
+            }
+          }
+        });
+
+      if(error){
+        const message =
+          String(
+            error.message || ''
+          );
+
+        if(
+          message
+            .toLowerCase()
+            .includes('provider')
+        ){
+          throw new Error(
+            'Google girişi Supabase üzerinde henüz etkinleştirilmemiş.'
+          );
+        }
+
+        throw error;
+      }
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] google:',
+        error
+      );
+
+      setMessage(
+        error?.message ||
+        'Google ile giriş başlatılamadı.',
         'error'
       );
     }
@@ -1093,321 +1543,645 @@
   async function forgot(event){
     event.preventDefault();
 
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
+    const form =
+      event.currentTarget;
 
     const email =
       String(
-        new FormData(
-          event.currentTarget
-        ).get('email') || ''
+        form.elements.email.value || ''
       )
-        .trim()
-        .toLowerCase();
+      .trim()
+      .toLowerCase();
 
-    if(!EMAIL_REGEX.test(email)){
-      return setMessage(
+    if(
+      !EMAIL_REGEX.test(email)
+    ){
+      setMessage(
         'Geçerli bir e-posta adresi gir.',
         'error'
       );
-    }
-
-    const {
-      error
-    } =
-      await s.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo:
-            location.href
-        }
-      );
-
-    if(error){
-      return setMessage(
-        'Kod gönderilemedi. E-posta ayarlarını veya adresini kontrol et.',
-        'error'
-      );
-    }
-
-    window.atlantisPendingEmail =
-      email;
-
-    window.atlantisOtpMode =
-      'recovery';
-
-    showForm('otp');
-
-    const info =
-      document.getElementById(
-        'otp-info'
-      );
-
-    if(info){
-      info.textContent =
-        email +
-        ' adresine şifre sıfırlama doğrulaması gönderildi.';
-    }
-
-    setMessage(
-      'Gmail/e-posta kutunu kontrol et.',
-      'success'
-    );
-  }
-
-  async function verifyOtp(event){
-    event.preventDefault();
-
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
-
-    const token =
-      String(
-        new FormData(
-          event.currentTarget
-        ).get('token') || ''
-      ).trim();
-
-    const email =
-      String(
-        window.atlantisPendingEmail ||
-        ''
-      )
-        .trim()
-        .toLowerCase();
-
-    if(
-      !email ||
-      !/^\d{6}$/.test(token)
-    ){
-      return setMessage(
-        '6 haneli kodu doğru gir.',
-        'error'
-      );
-    }
-
-    const type =
-      window.atlantisOtpMode ===
-      'recovery'
-        ? 'recovery'
-        : 'email';
-
-    const {
-      data,
-      error
-    } =
-      await s.auth.verifyOtp({
-        email,
-        token,
-        type
-      });
-
-    if(error){
-      return setMessage(
-        'Kod hatalı veya süresi dolmuş.',
-        'error'
-      );
-    }
-
-    /*
-     * Şifre sıfırlama kodu başarılıysa
-     * yeni şifre ekranına geç.
-     */
-    if(type === 'recovery'){
-      showForm('reset');
-
-      setMessage(
-        'Kod doğrulandı. Yeni şifreni belirle.',
-        'success'
-      );
-
       return;
     }
 
-    if(!data.user){
-      return setMessage(
-        'Hesap doğrulandı fakat kullanıcı bilgisi alınamadı.',
-        'error'
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
       );
+
+    const oldText =
+      button?.textContent || 'Kod Gönder';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Kontrol ediliyor...';
     }
 
-    await saveProfile(
-      data.user,
-      window.atlantisPendingUsername
-    );
+    try{
+      const client =
+        await getClient();
 
-    closeAuth();
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
 
-    await updateNav(
-      data.user
-    );
+      /*
+       * Kullanıcı gerçekten var mı diye
+       * güvenli şekilde Edge Function üzerinden
+       * kontrol edeceğiz.
+       *
+       * Function hazır değilse fallback olarak
+       * standart Supabase recovery isteği yapılır.
+       */
+      const recoveryEndpoint =
+        window.ATLANTIS_RECOVERY_URL || '';
+
+      if(recoveryEndpoint){
+        const response =
+          await fetch(
+            recoveryEndpoint,
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                apikey:
+                  cfg.publishableKey
+              },
+
+              body: JSON.stringify({
+                email
+              })
+            }
+          );
+
+        const result =
+          await response
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if(!response.ok){
+          throw new Error(
+            result.error ||
+            'Bu e-posta adresi kayıtlı değil.'
+          );
+        }
+      }else{
+        const {
+          error
+        } =
+          await client.auth.resetPasswordForEmail(
+            email,
+            {
+              redirectTo:
+                window.location.origin +
+                window.location.pathname
+            }
+          );
+
+        if(error){
+          throw new Error(
+            'Şifre sıfırlama işlemi başlatılamadı.'
+          );
+        }
+      }
+
+      window.atlantisPendingEmail =
+        email;
+
+      window.atlantisOtpMode =
+        'recovery';
+
+      showForm('otp');
+
+      const info =
+        document.getElementById(
+          'otp-info'
+        );
+
+      if(info){
+        info.textContent =
+          email +
+          ' adresine 6 haneli doğrulama kodu gönderildi.';
+      }
+
+      startResendTimer();
+
+      setMessage(
+        'Kod e-posta adresine gönderildi.',
+        'success'
+      );
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] recovery:',
+        error
+      );
+
+      setMessage(
+        error?.message ||
+        'Kod gönderilemedi.',
+        'error'
+      );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
+    }
+  }  async function verifyOtp(event){
+    event.preventDefault();
+
+    const form =
+      event.currentTarget;
+
+    const token =
+      String(
+        form.elements.token.value || ''
+      ).replace(/\D/g, '');
+
+    const email =
+      String(
+        window.atlantisPendingEmail || ''
+      )
+      .trim()
+      .toLowerCase();
+
+    if(!email){
+      setMessage(
+        'Doğrulama oturumunun süresi dolmuş. Baştan başla.',
+        'error'
+      );
+      showForm('login');
+      return;
+    }
+
+    if(!/^\d{6}$/.test(token)){
+      setMessage(
+        '6 haneli doğrulama kodunu eksiksiz gir.',
+        'error'
+      );
+      return;
+    }
+
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
+      );
+
+    const oldText =
+      button?.textContent ||
+      'Kodu Doğrula';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Doğrulanıyor...';
+    }
+
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      const type =
+        window.atlantisOtpMode ===
+        'recovery'
+          ? 'recovery'
+          : 'email';
+
+      const {
+        data,
+        error
+      } =
+        await client.auth.verifyOtp({
+          email,
+          token,
+          type
+        });
+
+      if(error){
+        throw new Error(
+          'Kod hatalı veya süresi dolmuş.'
+        );
+      }
+
+      if(
+        type === 'recovery'
+      ){
+        showForm('reset');
+
+        setMessage(
+          'Kod doğrulandı. Şimdi yeni şifreni belirle.',
+          'success'
+        );
+
+        return;
+      }
+
+      if(!data?.user){
+        throw new Error(
+          'Hesap doğrulandı fakat kullanıcı bilgisi alınamadı.'
+        );
+      }
+
+      const username =
+        window.atlantisPendingUsername;
+
+      if(username){
+        await saveProfile(
+          data.user,
+          username
+        );
+      }
+
+      if(data.session){
+        await afterLogin(
+          data.session
+        );
+      }else{
+        closeAuth();
+      }
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] verifyOtp:',
+        error
+      );
+
+      setMessage(
+        error?.message ||
+        'Kod doğrulanamadı.',
+        'error'
+      );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
+    }
+  }
+
+  async function resendOtp(){
+    if(
+      resendSeconds > 0
+    ){
+      return;
+    }
+
+    const email =
+      String(
+        window.atlantisPendingEmail || ''
+      )
+      .trim()
+      .toLowerCase();
+
+    if(
+      !EMAIL_REGEX.test(email)
+    ){
+      setMessage(
+        'E-posta adresi bulunamadı.',
+        'error'
+      );
+      return;
+    }
+
+    const button =
+      document.getElementById(
+        'otp-resend'
+      );
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Gönderiliyor...';
+    }
+
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      /*
+       * Kayıt doğrulama kodu
+       */
+      if(
+        window.atlantisOtpMode ===
+        'signup'
+      ){
+        const {
+          error
+        } =
+          await client.auth.resend({
+            type: 'signup',
+            email
+          });
+
+        if(error){
+          throw error;
+        }
+
+      /*
+       * Şifre kurtarma kodu
+       */
+      }else{
+        const {
+          error
+        } =
+          await client.auth.resetPasswordForEmail(
+            email,
+            {
+              redirectTo:
+                window.location.origin +
+                window.location.pathname
+            }
+          );
+
+        if(error){
+          throw error;
+        }
+      }
+
+      setMessage(
+        'Yeni doğrulama kodu gönderildi.',
+        'success'
+      );
+
+      startResendTimer();
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] resendOtp:',
+        error
+      );
+
+      setMessage(
+        'Kod tekrar gönderilemedi. Biraz sonra tekrar dene.',
+        'error'
+      );
+
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          'Kodu tekrar gönder';
+      }
+    }
   }
 
   async function resetPassword(event){
     event.preventDefault();
 
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
-
-    const data =
-      new FormData(
-        event.currentTarget
-      );
+    const form =
+      event.currentTarget;
 
     const password =
       String(
-        data.get('password') || ''
+        form.elements.password.value || ''
       );
 
     const password2 =
       String(
-        data.get('password2') || ''
+        form.elements.password2.value || ''
       );
 
-    if(password.length < 8){
-      return setMessage(
-        'Şifre en az 8 karakter olmalı.',
+    if(
+      password.length < 8
+    ){
+      setMessage(
+        'Yeni şifre en az 8 karakter olmalı.',
         'error'
       );
+      return;
     }
 
     if(password !== password2){
-      return setMessage(
-        'Şifreler eşleşmiyor.',
+      setMessage(
+        'Şifreler aynı değil.',
         'error'
       );
+      return;
     }
 
-    const {
-      error
-    } =
-      await s.auth.updateUser({
-        password
-      });
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
+      );
 
-    if(error){
-      return setMessage(
-        'Şifre değiştirilemedi.',
+    const oldText =
+      button?.textContent ||
+      'Şifreyi Değiştir';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Kaydediliyor...';
+    }
+
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      const {
+        error
+      } =
+        await client.auth.updateUser({
+          password
+        });
+
+      if(error){
+        throw error;
+      }
+
+      setMessage(
+        'Şifren başarıyla değiştirildi.',
+        'success'
+      );
+
+      window.setTimeout(
+        async () => {
+          const {
+            data
+          } =
+            await client.auth.getSession();
+
+          if(data?.session){
+            await afterLogin(
+              data.session
+            );
+          }else{
+            closeAuth();
+          }
+        },
+        800
+      );
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] resetPassword:',
+        error
+      );
+
+      setMessage(
+        'Şifre değiştirilemedi. Tekrar dene.',
         'error'
       );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
     }
-
-    setMessage(
-      'Şifren başarıyla değiştirildi.',
-      'success'
-    );
-
-    window.setTimeout(
-      () => closeAuth(),
-      900
-    );
   }
 
   async function completeProfile(event){
     event.preventDefault();
 
-    const s =
-      await getClient();
-
-    if(!s){
-      return setMessage(
-        'Supabase bağlantısı hazır değil.',
-        'error'
-      );
-    }
-
-    const {
-      data: {
-        session
-      }
-    } =
-      await s.auth.getSession();
-
-    if(!session){
-      openAuth('login');
-      return;
-    }
+    const form =
+      event.currentTarget;
 
     const username =
       String(
-        new FormData(
-          event.currentTarget
-        ).get('username') || ''
+        form.elements.username.value || ''
       ).trim();
 
-    if(!NAME_REGEX.test(username)){
-      return setMessage(
-        'Kullanıcı adı 3–16 karakter olmalı; boşluk ve özel sembol yok.',
-        'error'
-      );
-    }
-
-    const {
-      data: existing
-    } =
-      await s
-        .from('profiles')
-        .select('id')
-        .eq(
-          'username',
-          username
-        )
-        .maybeSingle();
-
     if(
-      existing &&
-      existing.id !== session.user.id
+      !NAME_REGEX.test(username)
     ){
-      return setMessage(
-        'Bu kullanıcı adı zaten alınmış.',
+      setMessage(
+        'Kullanıcı adı 3–16 karakter olmalı; ilk karakter harf olmalı ve boşluk/özel sembol içermemeli.',
         'error'
       );
+      return;
     }
 
-    const {
-      error
-    } =
-      await s.rpc(
-        'set_my_username',
-        {
-          new_username:
-            username
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
+      );
+
+    const oldText =
+      button?.textContent ||
+      'Kullanıcı Adımı Kaydet';
+
+    if(button){
+      button.disabled = true;
+      button.textContent =
+        'Kontrol ediliyor...';
+    }
+
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        throw new Error(
+          'Supabase bağlantısı kurulamadı.'
+        );
+      }
+
+      const {
+        data: {
+          session
         }
+      } =
+        await client.auth.getSession();
+
+      if(!session?.user){
+        showForm('login');
+
+        throw new Error(
+          'Oturum bulunamadı. Tekrar giriş yap.'
+        );
+      }
+
+      const {
+        data: existing,
+        error: checkError
+      } =
+        await client
+          .from('profiles')
+          .select('id')
+          .ilike(
+            'username',
+            username
+          )
+          .maybeSingle();
+
+      if(checkError){
+        console.warn(
+          '[Atlantis Auth] username check:',
+          checkError
+        );
+      }
+
+      if(
+        existing &&
+        existing.id !==
+          session.user.id
+      ){
+        throw new Error(
+          'Bu kullanıcı adı zaten alınmış.'
+        );
+      }
+
+      await saveProfile(
+        session.user,
+        username
       );
 
-    if(error){
-      return setMessage(
-        'Kullanıcı adı kaydedilemedi. Bu ad alınmış olabilir.',
+      closeAuth();
+
+      await updateNav(
+        session.user
+      );
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] completeProfile:',
+        error
+      );
+
+      setMessage(
+        error?.message ||
+        'Kullanıcı adı kaydedilemedi.',
         'error'
       );
+
+    }finally{
+      if(button){
+        button.disabled = false;
+        button.textContent =
+          oldText;
+      }
     }
-
-    closeAuth();
-
-    await updateNav(
-      session.user
-    );
   }
 
   async function saveProfile(
@@ -1416,23 +2190,31 @@
   ){
     if(
       !user ||
-      !username ||
       !window.atlantisSupabase
     ){
       return;
     }
 
     const cleanUsername =
-      String(username).trim();
+      String(
+        username || ''
+      ).trim();
 
     if(
       !NAME_REGEX.test(
         cleanUsername
       )
     ){
-      return;
+      throw new Error(
+        'Geçersiz kullanıcı adı.'
+      );
     }
 
+    /*
+     * RPC kullanıyoruz.
+     * Böylece kullanıcı kendi profilini
+     * kontrollü şekilde değiştirebilir.
+     */
     const {
       error
     } =
@@ -1448,17 +2230,24 @@
 
     if(error){
       console.error(
-        'Profil kaydedilemedi:',
+        '[Atlantis Auth] saveProfile:',
         error
+      );
+
+      throw new Error(
+        'Bu kullanıcı adı kullanılamıyor.'
       );
     }
   }
 
   async function getProfile(user){
-    const s =
+    const client =
       window.atlantisSupabase;
 
-    if(!s || !user){
+    if(
+      !client ||
+      !user
+    ){
       return null;
     }
 
@@ -1466,7 +2255,7 @@
       data,
       error
     } =
-      await s
+      await client
         .from('profiles')
         .select(
           'username,site_role,muted_until'
@@ -1479,7 +2268,7 @@
 
     if(error){
       console.error(
-        'Profil alınamadı:',
+        '[Atlantis Auth] getProfile:',
         error
       );
 
@@ -1489,7 +2278,45 @@
     return data || null;
   }
 
-  async function updateNav(user){
+  async function afterLogin(
+    session
+  ){
+    if(!session?.user){
+      throw new Error(
+        'Geçerli oturum bulunamadı.'
+      );
+    }
+
+    window.atlantisAuthSession =
+      session;
+
+    await updateNav(
+      session.user
+    );
+
+    closeAuth();
+
+    /*
+     * Sayfanın diğer scriptlerine
+     * giriş olayını bildiriyoruz.
+     */
+    window.dispatchEvent(
+      new CustomEvent(
+        'atlantis-auth-login',
+        {
+          detail: {
+            user:
+              session.user,
+            session
+          }
+        }
+      )
+    );
+  }
+
+  async function updateNav(
+    user
+  ){
     ensureUI();
 
     const btn =
@@ -1497,14 +2324,16 @@
         'auth-nav-button'
       );
 
-    if(!btn) return;
+    if(!btn){
+      return;
+    }
 
     if(!user){
       btn.textContent =
         'Giriş Yap';
 
-      btn.onclick = e => {
-        e.preventDefault();
+      btn.onclick = event => {
+        event.preventDefault();
         openAuth('login');
       };
 
@@ -1527,8 +2356,8 @@
       btn.textContent =
         '👤 Kullanıcı Adı';
 
-      btn.onclick = e => {
-        e.preventDefault();
+      btn.onclick = event => {
+        event.preventDefault();
         openAuth('complete');
       };
 
@@ -1539,10 +2368,7 @@
           true;
 
         window.setTimeout(
-          () =>
-            openAuth(
-              'complete'
-            ),
+          () => openAuth('complete'),
           250
         );
       }
@@ -1553,8 +2379,8 @@
     btn.textContent =
       '👤 ' + username;
 
-    btn.onclick = e => {
-      e.preventDefault();
+    btn.onclick = event => {
+      event.preventDefault();
 
       openProfileMenu(
         username,
@@ -1562,8 +2388,7 @@
       );
     };
   }
-
-  function openProfileMenu(
+    function openProfileMenu(
     username,
     role
   ){
@@ -1583,36 +2408,49 @@
           ? 'Moderatör'
           : 'Oyuncu';
 
-    const p =
+    const pop =
       document.createElement(
         'div'
       );
 
-    p.id =
+    pop.id =
       'profile-pop';
 
-    p.className =
+    pop.className =
       'profile-pop';
 
-    p.innerHTML = `
-      <strong>
-        ${esc(username)}
-      </strong>
+    pop.innerHTML = `
+      <div class="profile-pop-head">
+        <span class="profile-pop-avatar">
+          👤
+        </span>
 
-      <span
-        class="role-chip role-${esc(role)}"
-      >
-        ${roleLabel}
-      </span>
+        <div>
+          <strong>
+            ${esc(username)}
+          </strong>
+
+          <span
+            class="role-chip role-${esc(role)}"
+          >
+            ${roleLabel}
+          </span>
+        </div>
+      </div>
+
+      <div class="profile-pop-divider"></div>
 
       <a href="sohbet.html">
+        <span>💬</span>
         Sohbete Git
       </a>
 
       ${
-        role !== 'user'
+        role === 'admin' ||
+        role === 'moderator'
           ? `
             <a href="moderasyon.html">
+              <span>🛡️</span>
               Moderasyon Paneli
             </a>
           `
@@ -1623,108 +2461,306 @@
         id="logout-btn"
         type="button"
       >
+        <span>↪</span>
         Çıkış Yap
       </button>
     `;
 
-    document.body.appendChild(p);
+    document.body.appendChild(
+      pop
+    );
 
-    p.querySelector(
-      '#logout-btn'
-    ).onclick = async () => {
-
-      if(
-        window.atlantisSupabase
-      ){
-        await window
-          .atlantisSupabase
-          .auth
-          .signOut();
-      }
-
-      p.remove();
-
-      await updateNav(
-        null
+    const logout =
+      pop.querySelector(
+        '#logout-btn'
       );
-    };
 
+    if(logout){
+      logout.onclick =
+        async () => {
+
+          logout.disabled = true;
+          logout.textContent =
+            'Çıkış yapılıyor...';
+
+          try{
+            const client =
+              await getClient();
+
+            if(client){
+              await client.auth.signOut();
+            }
+
+            window.atlantisAuthSession =
+              null;
+
+            closeProfileMenu();
+
+            await updateNav(
+              null
+            );
+
+            window.dispatchEvent(
+              new CustomEvent(
+                'atlantis-auth-logout'
+              )
+            );
+
+          }catch(error){
+            console.error(
+              '[Atlantis Auth] logout:',
+              error
+            );
+
+            logout.disabled =
+              false;
+
+            logout.innerHTML =
+              '<span>↪</span> Çıkış Yap';
+          }
+        };
+    }
+
+    /*
+     * Menü dışına tıklanınca kapat.
+     */
     window.setTimeout(
       () => {
 
-        const close =
-          e => {
+        const outsideClick =
+          event => {
+
+            const target =
+              event.target;
 
             if(
-              !p.contains(
-                e.target
-              ) &&
-              e.target.id !==
+              !pop.contains(target) &&
+              target.id !==
                 'auth-nav-button'
             ){
-              p.remove();
+              closeProfileMenu();
 
               document.removeEventListener(
                 'click',
-                close
+                outsideClick
               );
             }
           };
 
         document.addEventListener(
           'click',
-          close
+          outsideClick
         );
+
+        pop._outsideClick =
+          outsideClick;
 
       },
       0
     );
   }
-    function closeProfileMenu(){
+
+  function closeProfileMenu(){
     const pop =
       document.getElementById(
         'profile-pop'
       );
 
-    if(pop){
-      pop.remove();
+    if(!pop){
+      return;
+    }
+
+    if(
+      pop._outsideClick
+    ){
+      document.removeEventListener(
+        'click',
+        pop._outsideClick
+      );
+    }
+
+    pop.remove();
+  }
+
+  function clearPendingAuth(){
+    window.atlantisPendingEmail =
+      null;
+
+    window.atlantisPendingUsername =
+      null;
+
+    window.atlantisOtpMode =
+      null;
+
+    stopResendTimer();
+  }
+
+  function closeAuth(){
+    const modal =
+      document.getElementById(
+        'auth-modal'
+      );
+
+    if(modal){
+      modal.hidden = true;
+    }
+
+    document.body.classList.remove(
+      'auth-open'
+    );
+
+    clearPendingAuth();
+  }
+
+  /*
+   * Supabase OAuth dönüşünü kontrol ediyoruz.
+   *
+   * Kullanıcı Google'dan döndüğünde veya
+   * e-posta doğrulaması yaptığında Supabase
+   * session'ı otomatik olarak oluşturur.
+   */
+  async function handleAuthCallback(){
+    try{
+      const client =
+        await getClient();
+
+      if(!client){
+        return;
+      }
+
+      const {
+        data: {
+          session
+        }
+      } =
+        await client.auth.getSession();
+
+      if(session?.user){
+        window.atlantisAuthSession =
+          session;
+
+        await updateNav(
+          session.user
+        );
+      }
+
+      /*
+       * URL'de Supabase'in auth parametreleri
+       * kaldıysa bunları temizliyoruz.
+       *
+       * Böylece kullanıcı adres çubuğunda
+       * uzun token/parametreler görmez.
+       */
+      const url =
+        new URL(
+          window.location.href
+        );
+
+      const hasAuthParams =
+        url.searchParams.has(
+          'code'
+        ) ||
+        url.searchParams.has(
+          'token_hash'
+        ) ||
+        url.searchParams.has(
+          'type'
+        ) ||
+        url.hash.includes(
+          'access_token='
+        ) ||
+        url.hash.includes(
+          'refresh_token='
+        );
+
+      if(hasAuthParams){
+        url.searchParams.delete(
+          'code'
+        );
+
+        url.searchParams.delete(
+          'token_hash'
+        );
+
+        url.searchParams.delete(
+          'type'
+        );
+
+        window.history.replaceState(
+          {},
+          document.title,
+          url.pathname +
+          url.search +
+          url.hash
+        );
+      }
+
+    }catch(error){
+      console.error(
+        '[Atlantis Auth] callback:',
+        error
+      );
     }
   }
 
   async function initAuth(){
     ensureUI();
 
-    const s =
+    const client =
       await getClient();
 
-    if(!s){
+    if(!client){
+      console.warn(
+        '[Atlantis Auth] Supabase client bulunamadı.'
+      );
+
       return;
     }
 
+    /*
+     * Mevcut oturumu yükle.
+     */
     const {
       data: {
         session
       }
     } =
-      await s.auth.getSession();
+      await client.auth.getSession();
+
+    if(session?.user){
+      window.atlantisAuthSession =
+        session;
+    }
 
     await updateNav(
       session?.user || null
     );
 
-    s.auth.onAuthStateChange(
-      async (
+    await handleAuthCallback();
+
+    /*
+     * Auth değişikliklerini dinle.
+     */
+    client.auth.onAuthStateChange(
+      (
         event,
         newSession
       ) => {
 
         /*
-         * Supabase callback sırasında
-         * ağır işlemleri doğrudan event
-         * callback'inde çalıştırmıyoruz.
+         * Supabase callback içinde
+         * ağır işlemleri doğrudan çalıştırmıyoruz.
          */
         window.setTimeout(
           async () => {
+
+            if(newSession){
+              window.atlantisAuthSession =
+                newSession;
+            }else{
+              window.atlantisAuthSession =
+                null;
+            }
 
             await updateNav(
               newSession?.user ||
@@ -1739,7 +2775,7 @@
   }
 
   /*
-   * Modal açılırken ESC ile kapat.
+   * ESC ile modalı kapat.
    */
   document.addEventListener(
     'keydown',
@@ -1762,23 +2798,87 @@
       ){
         closeAuth();
       }
+
+      closeProfileMenu();
     }
   );
 
   /*
-   * Sayfa hazır olduğunda başlat.
+   * Modal açıkken arka planda sayfanın
+   * kaydırılmasını engelle.
+   */
+  const bodyObserver =
+    new MutationObserver(
+      () => {
+
+        const modal =
+          document.getElementById(
+            'auth-modal'
+          );
+
+        if(
+          modal &&
+          !modal.hidden
+        ){
+          document.body.classList.add(
+            'auth-open'
+          );
+        }
+      }
+    );
+
+  /*
+   * DOM hazır olduğunda başlat.
    */
   if(
     document.readyState ===
     'loading'
   ){
+
     document.addEventListener(
       'DOMContentLoaded',
-      initAuth,
-      {once:true}
+      () => {
+
+        bodyObserver.observe(
+          document.body,
+          {
+            childList: true,
+            subtree: true
+          }
+        );
+
+        initAuth();
+
+      },
+      {
+        once: true
+      }
     );
+
   }else{
+
+    bodyObserver.observe(
+      document.body,
+      {
+        childList: true,
+        subtree: true
+      }
+    );
+
     initAuth();
   }
+
+  /*
+   * Dışarıdan kullanmak istersen:
+   *
+   * window.openAtlantisAuth('login')
+   * window.openAtlantisAuth('signup')
+   * window.openAtlantisAuth('forgot')
+   */
+  window.openAtlantisAuth =
+    openAuth;
+
+  window.closeAtlantisAuth =
+    closeAuth;
 
 })();
