@@ -818,12 +818,30 @@
         }
 
         button.textContent = 'Profil kaydediliyor...';
-        const { data, error } = await client.rpc('update_my_profile', {
+        let data = null;
+        let error = null;
+        const rpcResult = await client.rpc('update_my_profile', {
           new_avatar_url: finalAvatarUrl,
           new_bio: bioValue
         });
+        data = rpcResult.data;
+        error = rpcResult.error;
 
-        if (error) throw error;
+        // Older projects may not have the RPC deployed. Fall back to the
+        // owner-only profiles UPDATE policy instead of making the editor fail.
+        if (error) {
+          const direct = await client.from('profiles')
+            .update({
+              avatar_url: finalAvatarUrl,
+              bio: bioValue,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', sessionUser.id)
+            .select('*')
+            .maybeSingle();
+          if (direct.error) throw error;
+          data = direct.data;
+        }
 
         profile = data || { ...current, avatar_url: finalAvatarUrl, bio: bioValue };
         window.atlantisCurrentProfile = profile;

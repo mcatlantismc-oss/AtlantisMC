@@ -15,7 +15,7 @@
           if (!entry.isIntersecting) return;
           const siblings=[...reveals];
           const index=Math.max(0,siblings.indexOf(entry.target));
-          entry.target.style.animationDelay=`${Math.min(2,index)*35}ms`;
+          entry.target.style.animationDelay=`${Math.min(1,index)*8}ms`;
           entry.target.classList.add('in-view');
           obs.unobserve(entry.target);
         });
@@ -40,6 +40,7 @@
           const url = new URL(href, location.href);
           if (url.origin !== location.origin || seen.has(url.href)) return;
           seen.add(url.href);
+          if (seen.size > 8) return;
           const link = document.createElement('link');
           link.rel = 'prefetch';
           link.as = 'document';

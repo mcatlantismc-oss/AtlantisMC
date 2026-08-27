@@ -30,14 +30,20 @@
   };
 
   async function getClient() {
-    if (typeof window.atlantisGetClient === 'function') {
-      const client = await window.atlantisGetClient();
-      if (client) return client;
+    try {
+      if (window.atlantisSupabase?.auth) return window.atlantisSupabase;
+      if (typeof window.atlantisGetClient === 'function') {
+        const resolved = await window.atlantisGetClient();
+        if (resolved?.auth) { window.atlantisSupabase = resolved; return resolved; }
+      }
+      if (window.atlantisAuthReady) {
+        const resolved = await window.atlantisAuthReady;
+        if (resolved?.auth) { window.atlantisSupabase = resolved; return resolved; }
+      }
+    } catch (error) {
+      console.error('[Atlantis Social] Supabase client:', error);
     }
-    if (window.atlantisAuthReady) {
-      return await window.atlantisAuthReady;
-    }
-    return window.atlantisSupabase || null;
+    return null;
   }
 
   async function getCurrentUser(client) {
@@ -56,28 +62,17 @@
   }
 
   async function getState(client, me, targetId) {
-    const [{ data: favorite }, { data: note }, { data: block }] = await Promise.all([
-      client.from('user_favorites')
-        .select('favorite_user_id')
-        .eq('user_id', me.id)
-        .eq('favorite_user_id', targetId)
-        .maybeSingle(),
-      client.from('user_private_notes')
-        .select('note')
-        .eq('user_id', me.id)
-        .eq('target_user_id', targetId)
-        .maybeSingle(),
-      client.from('user_blocks')
-        .select('blocked_user_id')
-        .eq('user_id', me.id)
-        .eq('blocked_user_id', targetId)
-        .maybeSingle()
+    const [favRes, noteRes, blockRes] = await Promise.all([
+      client.from('user_favorites').select('favorite_user_id').eq('user_id', me.id).eq('favorite_user_id', targetId).maybeSingle(),
+      client.from('user_private_notes').select('note').eq('user_id', me.id).eq('target_user_id', targetId).maybeSingle(),
+      client.from('user_blocks').select('blocked_user_id').eq('user_id', me.id).eq('blocked_user_id', targetId).maybeSingle()
     ]);
-
+    const firstError = favRes.error || noteRes.error || blockRes.error;
+    if (firstError) console.warn('[Atlantis Social] state query:', firstError);
     return {
-      favorite: !!favorite,
-      note: note?.note || '',
-      blocked: !!block
+      favorite: !!favRes.data,
+      note: noteRes.data?.note || '',
+      blocked: !!blockRes.data
     };
   }
 
@@ -92,7 +87,7 @@
     }
 
     const { error } = await client.from('user_favorites')
-      .upsert({ user_id:me.id, favorite_user_id:targetId }, { onConflict:'user_id,favorite_user_id' });
+      .insert({ user_id:me.id, favorite_user_id:targetId });
     if (error) throw error;
     return true;
   }
@@ -132,7 +127,7 @@
     }
 
     const { error } = await client.from('user_blocks')
-      .upsert({ user_id:me.id, blocked_user_id:targetId }, { onConflict:'user_id,blocked_user_id' });
+      .insert({ user_id:me.id, blocked_user_id:targetId });
     if (error) throw error;
     return true;
   }
@@ -144,7 +139,8 @@
     });
   }
 
-  function renderOverlay(profile, state, me) {
+  function renderOverlay(profile, state, me, client) {
+    if (!client?.auth || !me?.id || !profile?.id) return toast('Profil bağlantısı hazır değil.');
     document.getElementById('atlantis-social-profile')?.remove();
 
     const role = profile.site_role || 'user';
@@ -230,7 +226,7 @@
         toast(next ? '⭐ Favorilere eklendi.' : 'Favorilerden çıkarıldı.');
         window.dispatchEvent(new CustomEvent('atlantis-favorite-changed', {detail:{userId:profile.id, favorite:next}}));
       } catch (error) {
-        toast('Favori işlemi tamamlanamadı. Önce Supabase tablolarını/RLS\'yi kontrol et.');
+        toast(`Favori işlemi tamamlanamadı${error?.message ? ': ' + error.message : '.'}`);
         console.error(error);
       }
     });
@@ -262,7 +258,7 @@
         toast(next ? '🚫 Kullanıcı engellendi.' : 'Kullanıcının engeli kaldırıldı.');
         if (typeof window.atlantisReloadChat === 'function') window.atlantisReloadChat();
       } catch (error) {
-        toast('Engelleme kaydedilemedi. Önce Supabase tablolarını/RLS\'yi kontrol et.');
+        toast(`Engelleme kaydedilemedi${error?.message ? ': ' + error.message : '.'}`);
         console.error(error);
       }
     });
@@ -284,7 +280,7 @@
         fetchProfile(client, userId, name),
         getState(client, me, userId)
       ]);
-      renderOverlay(profile, state, me);
+      renderOverlay(profile, state, me, client);
     } catch (error) {
       toast('Profil bilgileri alınamadı.');
       console.error(error);

@@ -9,6 +9,13 @@
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
   }[ch]));
 
+  function withTimeout(promise, ms, label='İşlem zaman aşımına uğradı.') {
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
+    ]);
+  }
+
   let client = null;
   let currentUser = null;
   let currentProfile = {};
@@ -22,6 +29,7 @@
   let presenceHeartbeat = null;
   const profileCache = new Map();
   let blockedUsers = new Set();
+  let blockedUserIds = new Set();
 
   try {
     blockedUsers = new Set(JSON.parse(localStorage.getItem('atlantis-chat-blocked-users') || '[]'));
@@ -36,7 +44,7 @@
     const input = document.getElementById('chat-input');
     if (!box || !form || !input) return;
 
-    client = await window.atlantisGetClient?.();
+    client = await withTimeout(window.atlantisGetClient?.(), 8000, 'Supabase bağlantısı zaman aşımına uğradı.').catch(() => null);
     if (!client && window.supabase && window.ATLANTIS_SUPABASE?.url && window.ATLANTIS_SUPABASE?.publishableKey) {
       client = window.supabase.createClient(window.ATLANTIS_SUPABASE.url, window.ATLANTIS_SUPABASE.publishableKey, {
         auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'pkce'}
@@ -49,6 +57,8 @@
     }
 
     await readIdentity();
+    await withTimeout(loadBlockedUsers(), 5000, 'Engel listesi alınamadı.').catch(() => { blockedUserIds = new Set(); });
+    blockedUsers = new Set(blockedUserIds);
     ensureTypingUI();
     setupNotificationControls();
     bindAuthEvents();
@@ -62,15 +72,19 @@
   }
 
   async function readIdentity() {
-    const { data:{ session } } = await client.auth.getSession();
+    const { data:{ session } } = await withTimeout(client.auth.getSession(), 8000, 'Oturum bilgisi alınamadı.');
     currentUser = session?.user || null;
     currentProfile = {};
 
     if (currentUser) {
-      const { data } = await client.from('profiles')
-        .select('id,username,avatar_url,bio,site_role,muted_until,last_seen,created_at,updated_at')
-        .eq('id',currentUser.id)
-        .maybeSingle();
+      const { data } = await withTimeout(
+        client.from('profiles')
+          .select('id,username,avatar_url,bio,site_role,muted_until,last_seen,created_at,updated_at')
+          .eq('id',currentUser.id)
+          .maybeSingle(),
+        8000,
+        'Profil bilgisi alınamadı.'
+      ).catch(() => ({data:null}));
       currentProfile = data || {};
       if (data?.id) profileCache.set(data.id,data);
     }
@@ -79,6 +93,8 @@
   function bindAuthEvents() {
     window.addEventListener('atlantis-auth-login', async () => {
       await refreshIdentityOnly();
+      await withTimeout(loadBlockedUsers(), 5000, 'Engel listesi alınamadı.').catch(() => { blockedUserIds = new Set(); });
+      blockedUsers = new Set(blockedUserIds);
       await syncMessages({initial:false});
       subscribeChat();
       subscribePresence();
@@ -90,6 +106,8 @@
       currentUser = null;
       currentProfile = {};
       profileCache.clear();
+      blockedUsers.clear();
+      blockedUserIds.clear();
       try { if (chatChannel) await client.removeChannel(chatChannel); } catch {}
       try { if (presenceChannel) await client.removeChannel(presenceChannel); } catch {}
       chatChannel = null;
@@ -120,10 +138,19 @@
   }
 
   async function fetchMessages() {
-    let result = await client.from('messages')
+    const request = client.from('messages')
       .select('id,user_id,username,message,created_at,edited_at,avatar_url')
       .order('created_at',{ascending:false})
       .limit(300);
+    let result;
+    try {
+      result = await Promise.race([
+        request,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Sohbet sunucusundan yanıt alınamadı.')), 12000))
+      ]);
+    } catch (error) {
+      return { data:null, error };
+    }
     if (!result.error && Array.isArray(result.data)) result.data.reverse();
 
     if (result.error) {
@@ -214,15 +241,35 @@
     const missing = ids.filter(id => !profileCache.has(id));
     if (!missing.length) return;
 
-    const { data,error } = await client.from('profiles')
-      .select('id,username,avatar_url,bio,site_role,last_seen,created_at')
-      .in('id',missing);
+    const { data,error } = await withTimeout(
+      client.from('profiles')
+        .select('id,username,avatar_url,bio,site_role,last_seen,created_at')
+        .in('id',missing),
+      8000,
+      'Profil listesi alınamadı.'
+    ).catch(error => ({data:null,error}));
 
     if (error) {
       console.warn('[Atlantis Chat] profile preload:',error);
       return;
     }
     (data || []).forEach(p => profileCache.set(p.id,p));
+  }
+
+
+  async function loadBlockedUsers() {
+    blockedUserIds = new Set();
+    if (!currentUser) return;
+    const { data, error } = await withTimeout(
+      client.from('user_blocks')
+        .select('blocked_user_id')
+        .eq('user_id', currentUser.id),
+      5000,
+      'Engel listesi alınamadı.'
+    ).catch(error => ({data:null,error}));
+    if (!error) {
+      blockedUserIds = new Set((data || []).map(row => String(row.blocked_user_id)));
+    }
   }
 
   function displayName(message) {
@@ -259,6 +306,7 @@
 
   function buildMessageHtml(message) {
     const userId = String(message.user_id || '');
+    if (userId && blockedUserIds.has(userId) && userId !== String(currentUser?.id || '')) return;
     const name = displayName(message);
     const avatar = avatarUrl(message);
     const initial = name.trim().charAt(0).toLocaleUpperCase('tr-TR') || 'A';
@@ -903,6 +951,19 @@
     clearTimeout(el._timer);
     el._timer = setTimeout(()=>el.classList.remove('show'),2400);
   }
+
+  async function refreshChat() {
+    try {
+      await readIdentity();
+      await withTimeout(loadBlockedUsers(), 5000, 'Engel listesi alınamadı.').catch(() => { blockedUserIds = new Set(); });
+      blockedUsers = new Set(blockedUserIds);
+      await syncMessages({initial:false});
+    } catch (error) {
+      console.error('[Atlantis Chat] refresh:', error);
+    }
+  }
+
+  window.atlantisReloadChat = refreshChat;
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
