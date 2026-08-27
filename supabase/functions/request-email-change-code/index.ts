@@ -126,4 +126,3 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu." }, 500);
   }
 });
-                                                                    
