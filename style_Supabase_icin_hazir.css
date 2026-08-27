@@ -1,0 +1,26 @@
+/* Atlantis MC — mevcut style.css sonuna eklenecek geliştirme stilleri */
+.atlantis-profile-card-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,18,.8);backdrop-filter:blur(7px)}
+.atlantis-profile-card{position:relative;width:min(470px,100%);max-height:min(90vh,760px);overflow:auto;padding:24px;border:1px solid rgba(127,216,255,.25);border-radius:22px;background:linear-gradient(160deg,rgba(8,25,46,.99),rgba(5,16,31,.99));box-shadow:0 30px 100px rgba(0,0,0,.55)}
+.atlantis-profile-card-close{position:absolute;right:12px;top:8px;border:0;background:transparent;color:var(--muted);font-size:30px;cursor:pointer}
+.atlantis-profile-hero{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.atlantis-profile-big-avatar{width:88px;height:88px;flex:0 0 88px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:rgba(88,199,255,.08);border:1px solid var(--line);font-size:32px;font-weight:900}
+.atlantis-profile-avatar-image{width:100%;height:100%;object-fit:cover;display:block}
+.atlantis-profile-avatar-letter{display:grid;place-items:center;width:100%;height:100%}
+.atlantis-profile-card h3{margin:0 0 6px;font-size:26px}
+.atlantis-profile-bio{padding:14px;border-radius:13px;background:rgba(255,255,255,.04);color:#d8ebf7;line-height:1.55;white-space:pre-wrap;margin:10px 0 14px}
+.atlantis-profile-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.atlantis-profile-meta>div{padding:11px 13px;border-radius:13px;background:rgba(255,255,255,.035)}
+.atlantis-profile-meta span,.atlantis-profile-meta strong{display:block}
+.atlantis-profile-meta span{font-size:11px;color:var(--muted);margin-bottom:4px}.atlantis-profile-meta strong{font-size:14px}
+.atlantis-online-badge{display:flex;align-items:center;gap:7px;margin-top:6px;color:#9fdcff;font-size:12px}.atlantis-online-badge i{width:8px;height:8px;border-radius:50%;display:block;background:var(--success)}
+.atlantis-edit-avatar-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;margin:12px 0 18px}
+.atlantis-file-btn{cursor:pointer}.atlantis-edit-field{display:grid;gap:7px;margin:12px 0;font-weight:700}
+.atlantis-edit-field input,.atlantis-edit-field textarea{width:100%;box-sizing:border-box;padding:12px;border:1px solid rgba(127,216,255,.18);border-radius:12px;background:rgba(2,10,22,.58);color:var(--text);font:inherit}
+.atlantis-edit-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:15px}.atlantis-edit-note{color:var(--muted);font-size:12px}
+.chat-avatar-button{padding:0;border:0;overflow:hidden;cursor:pointer}.chat-avatar-button img{width:100%;height:100%;object-fit:cover;display:block}
+.chat-user-button{padding:0;border:0;background:transparent;color:var(--accent2);font:inherit;font-weight:800;cursor:pointer}.chat-user-button:hover{text-decoration:underline}
+.chat-message-actions{display:flex;gap:8px;margin-top:5px}.chat-message-actions button{padding:0;border:0;background:transparent;color:var(--accent2);font-size:11px;cursor:pointer}.chat-message-actions button:hover{text-decoration:underline}
+.chat-mention{color:var(--accent2);font-weight:900}.chat-typing{min-height:24px;display:flex;align-items:center;gap:4px;padding:4px 10px;color:#9bdcff;font-size:13px}
+.chat-typing i{width:5px;height:5px;border-radius:50%;background:currentColor;animation:atlantisTyping 1s infinite ease-in-out}.chat-typing i:nth-child(3){animation-delay:.15s}.chat-typing i:nth-child(4){animation-delay:.3s}
+@keyframes atlantisTyping{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-3px);opacity:1}}
+@media(max-width:640px){.atlantis-profile-meta{grid-template-columns:1fr}.atlantis-profile-card{padding:19px}}
