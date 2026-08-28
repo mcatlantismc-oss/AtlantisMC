@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>https://atlantismc.online/</loc>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://atlantismc.online/hakkimizda.html</loc>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://atlantismc.online/haberler.html</loc>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://atlantismc.online/oy-verme.html</loc>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://atlantismc.online/iletisim.html</loc>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://atlantismc.online/sohbet.html</loc>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>
