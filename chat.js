@@ -896,7 +896,7 @@
       try {
         const result = own
           ? await client.from('messages').delete().eq('id',message.id).eq('user_id',currentUser.id)
-          : await client.rpc('moderation_delete_message',{target_message_id:message.id});
+          : await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)});
         const { error } = result;
         if (error) throw error;
         const el = document.getElementById(`chat-message-${message.id}`);
@@ -941,7 +941,7 @@
     const msgBox=overlay.querySelector('[data-mod-message]');
     const run=async(action)=>{
       try{
-        if(action.type==='delete'){ const {error}=await client.rpc('moderation_delete_message',{target_message_id:message.id}); if(error) throw error; }
+        if(action.type==='delete'){ const {error}=await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)}); if(error) throw error; }
         if(action.type==='mute'){ const {error}=await client.rpc('moderation_set_mute',{target_user_id:message.user_id,duration_seconds:action.seconds}); if(error) throw error; }
         if(action.type==='ban'){ const {error}=await client.rpc('moderation_set_ban',{target_user_id:message.user_id,duration_seconds:action.seconds,reason:'Sohbet moderasyonu'}); if(error) throw error; }
         msgBox.textContent=action.ok; msgBox.className='auth-message success';

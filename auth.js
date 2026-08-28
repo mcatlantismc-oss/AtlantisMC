@@ -693,16 +693,56 @@
 
   async function confirmLogout() {
     if (!client || !sessionUser) return;
-    if (!confirm('Atlantis MC hesabından çıkış yapmak istediğine emin misin?')) return;
-    const { error } = await client.auth.signOut();
-    if (error) {
-      alert(error.message || 'Çıkış yapılamadı.');
-      return;
-    }
-    closeDrawer();
-    setGlobalProfile(null, null);
-    updateNav();
-    window.dispatchEvent(new CustomEvent('atlantis-auth-logout'));
+
+    const overlay = makeActionModal(
+      'atlantis-logout-confirm',
+      'Çıkış Yap',
+      'Atlantis MC hesabından güvenli şekilde çıkış yap.',
+      `
+        <div class="logout-confirm-card">
+          <div class="logout-confirm-icon" aria-hidden="true">↪</div>
+          <div class="logout-confirm-copy">
+            <strong>Oturumunu kapatmak üzeresin</strong>
+            <span>Bu cihazdaki Atlantis MC hesabından çıkış yapılacak. Daha sonra tekrar giriş yapabilirsin.</span>
+          </div>
+        </div>
+        <div class="logout-confirm-actions">
+          <button class="secondary-button wide" type="button" data-logout-cancel>Vazgeç</button>
+          <button class="logout-danger-button wide" type="button" data-logout-confirm>Çıkış Yap</button>
+        </div>
+        <div class="auth-message" data-logout-message aria-live="polite"></div>
+      `
+    );
+
+    const cancel = () => overlay?.remove();
+    const cancelButton = overlay.querySelector('[data-logout-cancel]');
+    const confirmButton = overlay.querySelector('[data-logout-confirm]');
+    const message = overlay.querySelector('[data-logout-message]');
+
+    cancelButton?.addEventListener('click', cancel);
+    confirmButton?.addEventListener('click', async () => {
+      if (!client || !sessionUser || confirmButton.disabled) return;
+      confirmButton.disabled = true;
+      cancelButton.disabled = true;
+      confirmButton.textContent = 'Çıkış yapılıyor…';
+      message.textContent = '';
+
+      const { error } = await client.auth.signOut();
+      if (error) {
+        confirmButton.disabled = false;
+        cancelButton.disabled = false;
+        confirmButton.textContent = 'Çıkış Yap';
+        message.textContent = error.message || 'Çıkış yapılamadı.';
+        message.className = 'auth-message error';
+        return;
+      }
+
+      overlay.remove();
+      closeDrawer();
+      setGlobalProfile(null, null);
+      updateNav();
+      window.dispatchEvent(new CustomEvent('atlantis-auth-logout'));
+    });
   }
 
   async function uploadAvatarToStorage(file) {
@@ -978,6 +1018,29 @@
 
     document.body.appendChild(modal);
 
+    // Password visibility controls for every password field in the auth modal.
+    modal.querySelectorAll('input[type="password"]').forEach(input => {
+      if (input.closest('.password-field')) return;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'password-field';
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'password-toggle';
+      toggle.setAttribute('aria-label', 'Şifreyi göster');
+      toggle.setAttribute('title', 'Şifreyi göster');
+      toggle.innerHTML = '👁';
+      toggle.addEventListener('click', () => {
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        toggle.innerHTML = visible ? '👁' : '🙈';
+        toggle.setAttribute('aria-label', visible ? 'Şifreyi göster' : 'Şifreyi gizle');
+        toggle.setAttribute('title', visible ? 'Şifreyi göster' : 'Şifreyi gizle');
+      });
+      wrapper.appendChild(toggle);
+    });
+
     modal.querySelector('.auth-close').onclick = closeAuth;
     modal.querySelector('.auth-backdrop').onclick = closeAuth;
     modal.querySelectorAll('[data-auth-tab]').forEach(btn => btn.onclick = () => openAuth(btn.dataset.authTab));
@@ -1166,15 +1229,15 @@
     const { error } = await client.auth.signInWithOAuth({
       provider:'google',
       options:{
-        redirectTo:window.location.origin + window.location.pathname,
-        queryParams:{prompt:'select_account',access_type:'offline'},
+        redirectTo:window.location.origin + '/',
+        queryParams:{prompt:'select_account'},
         skipBrowserRedirect:false
       }
     });
     if (error) {
       const msg = String(error.message || 'Google girişi başarısız.');
       setAuthMessage(msg.toLowerCase().includes('provider') || msg.toLowerCase().includes('disabled')
-        ? 'Google ile giriş için Supabase > Authentication > Providers > Google bölümünü etkinleştir.'
+        ? 'Google girişi kapalı. Supabase > Authentication > Providers > Google bölümünde Google sağlayıcısını etkinleştir ve Client ID/Secret ile Redirect URL ayarlarını tamamla.'
         : msg,'error');
     }
   }
