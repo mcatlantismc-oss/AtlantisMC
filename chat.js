@@ -320,6 +320,23 @@
     return Number.isNaN(date.getTime()) ? '--:--' : date.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
   }
 
+  function targetRoleForMessage(message) {
+    if (!message?.user_id) return 'user';
+    return String(profileCache.get(message.user_id)?.site_role || 'unknown').trim().toLowerCase();
+  }
+
+  function canDeleteMessage(message) {
+    if (!currentUser || !message) return false;
+    const myRole = String(currentProfile?.site_role || 'user').trim().toLowerCase();
+    const own = String(message.user_id || '') === String(currentUser.id || '');
+    if (own) return true;
+    if (!['admin','moderator'].includes(myRole)) return false;
+    const targetRole = targetRoleForMessage(message);
+    if (targetRole === 'unknown') return false;
+    if (myRole === 'admin') return true;
+    return targetRole === 'user';
+  }
+
   function buildMessageHtml(message) {
     const userId = String(message.user_id || '');
     if (userId && blockedUserIds.has(userId) && userId !== String(currentUser?.id || '')) return;
@@ -328,8 +345,9 @@
     const initial = name.trim().charAt(0).toLocaleUpperCase('tr-TR') || 'A';
     const mine = userId && userId === String(currentUser?.id || '');
     const role = userId ? (profileCache.get(userId)?.site_role || 'user') : 'guest';
-    const myRole = currentProfile?.site_role || 'user';
-    const canModerate = myRole === 'admin' || myRole === 'moderator';
+    const myRole = String(currentProfile?.site_role || 'user').trim().toLowerCase();
+    const canModerate = ['admin','moderator'].includes(myRole);
+    const canDelete = canDeleteMessage(message);
     const edited = message.edited_at ? ' · düzenlendi' : '';
 
     return `
@@ -343,10 +361,10 @@
           <time datetime="${esc(message.created_at || '')}">${esc(messageTime(message.created_at))}${esc(edited)}</time>
         </div>
         <p class="chat-message-text">${formatMentions(message.message)}</p>
-        ${mine || canModerate ? `
+        ${(mine || canDelete || (canModerate && userId && userId !== String(currentUser?.id || '') && targetRoleForMessage(message) !== 'unknown')) ? `
           <div class="chat-message-actions" aria-label="Mesaj işlemleri">
             ${mine ? '<button type="button" class="chat-edit-action" data-chat-edit>✎ Düzenle</button>' : ''}
-            ${mine || canModerate ? '<button type="button" class="chat-delete-action" data-chat-delete>× Sil</button>' : ''}
+            ${canDelete ? '<button type="button" class="chat-delete-action" data-chat-delete>× Sil</button>' : ''}
             ${canModerate && userId && userId !== String(currentUser?.id || '') ? '<button type="button" class="chat-moderate-action" data-chat-moderate>🛡 Yönet</button>' : ''}
           </div>` : ''}
       </div>`;
@@ -858,10 +876,8 @@
   }
 
   async function deleteMessage(message) {
-    if (!currentUser) return;
-    const own = String(message.user_id) === String(currentUser.id);
-    const canModerate = ['admin','moderator'].includes(String(currentProfile?.site_role || ''));
-    if (!own && !canModerate) return;
+    if (!currentUser || !canDeleteMessage(message)) return;
+    const own = String(message.user_id || '') === String(currentUser.id);
     const overlay = openChatDialog({
       title:'Mesajı Sil',
       subtitle:'Bu işlem mesajı sohbetten kaldırır.',
@@ -955,13 +971,14 @@
       tools = document.createElement('div');
       tools.id = 'chat-tools';
       tools.className = 'chat-tools';
+      tools.setAttribute('aria-label','Sohbet araçları');
       head.appendChild(tools);
     }
 
     if (!tools.querySelector('#chat-sound')) {
       const soundButton = document.createElement('button');
       soundButton.id = 'chat-sound';
-      soundButton.className = 'ghost-button';
+      soundButton.className = 'ghost-button chat-tool-button';
       soundButton.type = 'button';
       soundButton.setAttribute('aria-pressed','false');
       soundButton.textContent = 'Etiket Sesi Kapalı';
@@ -969,20 +986,32 @@
     }
 
     const role = String(currentProfile?.site_role || '').trim().toLowerCase();
-    const canClear = !!currentUser && ['admin','moderator'].includes(role);
+    const canModerate = !!currentUser && ['admin','moderator'].includes(role);
 
     let clearButton = document.getElementById('chat-clear');
-    if (canClear && !clearButton) {
+    if (canModerate && !clearButton) {
       clearButton = document.createElement('button');
       clearButton.id = 'chat-clear';
-      clearButton.className = 'ghost-button danger-button';
+      clearButton.className = 'danger-button chat-tool-button chat-clear-button';
       clearButton.type = 'button';
       clearButton.textContent = 'Sohbeti Temizle';
-      clearButton.setAttribute('title','Sohbetteki tüm mesajları temizle');
+      clearButton.title = 'Sohbetteki tüm mesajları temizle';
       clearButton.addEventListener('click', clearChat);
       tools.appendChild(clearButton);
-    } else if (!canClear) {
+    } else if (!canModerate) {
       clearButton?.remove();
+    }
+
+    let lockButton = document.getElementById('chat-lock');
+    if (canModerate && !lockButton) {
+      lockButton = document.createElement('button');
+      lockButton.id = 'chat-lock';
+      lockButton.className = 'danger-button chat-tool-button chat-lock-toggle';
+      lockButton.type = 'button';
+      lockButton.addEventListener('click', toggleChatLock);
+      tools.appendChild(lockButton);
+    } else if (!canModerate) {
+      lockButton?.remove();
     }
 
     const sound = document.getElementById('chat-sound');
@@ -1003,11 +1032,39 @@
     updateChatControls();
   }
 
+  function updateLockButton(button) {
+    if (!button) return;
+    button.textContent = chatLocked ? 'Sohbeti Aç' : 'Sohbeti Kilitle';
+    button.classList.toggle('is-locked', !!chatLocked);
+    button.setAttribute('aria-pressed', String(!!chatLocked));
+  }
+
+  async function toggleChatLock() {
+    const role = String(currentProfile?.site_role || '').trim().toLowerCase();
+    if (!currentUser || !['admin','moderator'].includes(role) || !client) return;
+    const button = document.getElementById('chat-lock');
+    const nextLocked = !chatLocked;
+    button?.classList.add('is-working');
+    try {
+      const {error} = await client.rpc('moderation_set_chat_lock',{lock_chat:nextLocked});
+      if (error) throw error;
+      chatLocked = nextLocked;
+      updateComposer();
+      updateChatControls();
+      toast(nextLocked ? 'Sohbet kilitlendi.' : 'Sohbet tekrar açıldı.','success');
+    } catch(error) {
+      toast(error?.message || 'Sohbet kilidi değiştirilemedi.','error');
+    } finally {
+      button?.classList.remove('is-working');
+    }
+  }
+
   function updateChatControls() {
     const s = document.getElementById('chat-sound');
     const clearButton = document.getElementById('chat-clear');
+    const lockButton = document.getElementById('chat-lock');
     const role = String(currentProfile?.site_role || '').trim().toLowerCase();
-    const canClear = !!currentUser && ['admin','moderator'].includes(role);
+    const canModerate = !!currentUser && ['admin','moderator'].includes(role);
     const soundEnabled = localStorage.getItem('atlantis-chat-sound') === '1';
 
     if (s) {
@@ -1016,44 +1073,85 @@
       s.classList.toggle('is-enabled', soundEnabled);
       s.classList.toggle('is-disabled', !soundEnabled);
     }
-
     if (clearButton) {
-      clearButton.hidden = !canClear;
-      clearButton.disabled = !canClear;
+      clearButton.hidden = !canModerate;
+      clearButton.disabled = !canModerate;
     }
+    if (lockButton) {
+      lockButton.hidden = !canModerate;
+      lockButton.disabled = !canModerate;
+      updateLockButton(lockButton);
+    }
+  }
+
+  function openClearChatConfirm(onConfirm) {
+    const overlay = openChatDialog({
+      title:'Sohbeti Temizle',
+      subtitle:'Bu işlem sohbet geçmişindeki tüm mesajları kalıcı olarak kaldırır.',
+      content:`
+        <div class="chat-clear-warning">
+          <div class="chat-clear-warning-icon">!</div>
+          <div>
+            <strong>Tüm sohbet geçmişi silinecek.</strong>
+            <p>Bu işlem geri alınamaz. Sohbeti temizlemek istediğine emin misin?</p>
+          </div>
+        </div>
+        <div class="chat-delete-actions">
+          <button type="button" class="secondary-button" data-clear-cancel>Vazgeç</button>
+          <button type="button" class="danger-button chat-clear-confirm" data-clear-confirm>Temizle</button>
+        </div>`
+    });
+    overlay.querySelector('[data-clear-cancel]').onclick = () => overlay.remove();
+    overlay.querySelector('[data-clear-confirm]').onclick = async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Temizleniyor…';
+      try {
+        await onConfirm();
+        overlay.remove();
+      } catch(error) {
+        button.disabled = false;
+        button.textContent = 'Temizle';
+        let box = overlay.querySelector('[data-clear-error]');
+        if (!box) {
+          box = document.createElement('div');
+          box.dataset.clearError = '1';
+          box.className = 'auth-message error';
+          overlay.querySelector('.chat-action-content')?.appendChild(box);
+        }
+        box.textContent = error?.message || 'Sohbet temizlenemedi.';
+      }
+    };
+    return overlay;
   }
 
   async function clearChat() {
     const role = String(currentProfile?.site_role || '').trim().toLowerCase();
-    if (!currentUser || !['admin','moderator'].includes(role)) {
-      return toast('Sohbet temizleme yetkin yok.');
+    if (!currentUser || !['admin','moderator'].includes(role) || !client) {
+      return toast('Sohbet temizleme yetkin yok.','error');
     }
-    if (!confirm('Sohbetteki tüm mesajlar silinsin mi? Bu işlem geri alınamaz.')) return;
 
     const button = document.getElementById('chat-clear');
-    if (!button) return;
+    if (!button || button.disabled) return;
 
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Temizleniyor…';
-
-    try {
-      const { data, error } = await client.rpc('moderation_clear_chat');
-      if (error) throw error;
-
-      // Re-fetch immediately so the local view is cleared even if realtime
-      // DELETE events arrive slightly later.
-      await syncMessages({initial:false});
-      const count = Number(data);
-      toast(Number.isFinite(count) ? `${count} mesaj temizlendi.` : 'Sohbet temizlendi.');
-    } catch (error) {
-      toast(error?.message || 'Sohbet temizlenemedi.');
-    } finally {
-      button.disabled = false;
-      button.textContent = originalText;
-      updateChatControls();
-    }
+    openClearChatConfirm(async () => {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Temizleniyor…';
+      try {
+        const {data,error} = await client.rpc('moderation_clear_chat');
+        if (error) throw error;
+        await syncMessages({initial:false});
+        const count = Number(data);
+        toast(Number.isFinite(count) ? `${count} mesaj temizlendi.` : 'Sohbet temizlendi.','success');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+        updateChatControls();
+      }
+    });
   }
+
 
   let audioContext = null;
   function ensureAudioReady() {
@@ -1119,8 +1217,8 @@
     if (box) box.innerHTML = `<div class="chat-empty chat-error">${esc(text)}</div>`;
   }
 
-  function toast(text) {
-    if (window.atlantisToast) {
+  function toast(text, type='info') {
+    if (window.atlantisToast && type === 'info') {
       window.atlantisToast(text);
       return;
     }
@@ -1132,9 +1230,12 @@
       document.body.appendChild(el);
     }
     el.textContent = text;
+    el.classList.remove('is-success','is-error');
+    if (type === 'success') el.classList.add('is-success');
+    if (type === 'error') el.classList.add('is-error');
     el.classList.add('show');
     clearTimeout(el._timer);
-    el._timer = setTimeout(()=>el.classList.remove('show'),2400);
+    el._timer = setTimeout(()=>el.classList.remove('show','is-success','is-error'),2600);
   }
 
   async function refreshChat() {

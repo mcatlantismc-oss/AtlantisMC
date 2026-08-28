@@ -56,24 +56,46 @@
 
   async function getClient() {
     if (client?.auth) return client;
-    try {
-      const ready = window.atlantisGetClient
-        ? window.atlantisGetClient()
-        : window.atlantisAuthReady;
-      const resolved = await withTimeout(
-        ready,
-        10000,
-        'Supabase bağlantısı zaman aşımına uğradı.'
-      );
-      if (resolved?.auth) {
-        client = resolved;
-        window.atlantisSupabase = resolved;
-      }
-    } catch (error) {
-      console.warn('[Atlantis Moderation] client:', error);
+    const started = Date.now();
+    while (Date.now() - started < 12000) {
+      try {
+        if (window.atlantisGetClient) {
+          const resolved = await withTimeout(window.atlantisGetClient(), 3000, 'Supabase bağlantısı zaman aşımına uğradı.');
+          if (resolved?.auth) {
+            client = resolved;
+            window.atlantisSupabase = resolved;
+            return client;
+          }
+        }
+        if (window.atlantisSupabase?.auth) {
+          client = window.atlantisSupabase;
+          return client;
+        }
+      } catch {}
+      await new Promise(resolve => setTimeout(resolve,150));
     }
     return client;
   }
+
+  async function waitForAuthenticatedIdentity() {
+    const started = Date.now();
+    while (Date.now() - started < 10000) {
+      const shellUser = window.atlantisAuthSession?.user || null;
+      const shellProfile = window.atlantisCurrentProfile?.id ? window.atlantisCurrentProfile : null;
+      if (shellUser && shellProfile?.site_role) return {user:shellUser, profile:shellProfile};
+
+      try {
+        const {data:{session}} = await withTimeout(client.auth.getSession(),2500,'Oturum bilgisi alınamadı.');
+        if (session?.user) {
+          const own = await selectOwnProfile(session.user.id);
+          if (own?.data?.site_role) return {user:session.user, profile:own.data};
+        }
+      } catch {}
+      await new Promise(resolve => setTimeout(resolve,250));
+    }
+    return null;
+  }
+
 
   async function selectOwnProfile(userId) {
     if (!client || !userId) return {data:null,error:new Error('Profil bağlantısı hazır değil.')};
@@ -128,34 +150,21 @@
   async function init() {
     if (initialized) return;
     initialized = true;
+
     client = await getClient();
     if (!client) return showDenied('Supabase bağlantısı kurulamadı.');
 
-    const sessionResult = await withTimeout(
-      client.auth.getSession(),
-      7000,
-      'Oturum bilgisi alınamadı.'
-    ).catch(error => ({data:{session:null},error}));
-    const session = sessionResult?.data?.session;
-    me = session?.user || window.atlantisAuthSession?.user || null;
+    const identity = await waitForAuthenticatedIdentity();
+    me = identity?.user || null;
     if (!me) return showDenied('Bu paneli görmek için giriş yapmalısın.');
 
-    const { data:profile, error } = await selectOwnProfile(me.id);
-    const shellProfile = window.atlantisCurrentProfile?.id === me.id
-      ? window.atlantisCurrentProfile
-      : null;
-    const resolvedProfile = profile || shellProfile;
-    if (!resolvedProfile) {
-      return showDenied(error?.message || 'Profil bulunamadı.');
-    }
+    const resolvedProfile = identity?.profile || null;
+    if (!resolvedProfile) return showDenied('Profil bulunamadı.');
 
     resolvedProfile.site_role = String(resolvedProfile.site_role || '').trim().toLowerCase();
     myProfile = resolvedProfile;
 
-    // Always authorize against the resolved profile (which can come from the
-    // shell fallback when the full/fallback query is temporarily unavailable).
-    const role = resolvedProfile.site_role;
-    if (!['admin','moderator'].includes(role)) {
+    if (!['admin','moderator'].includes(resolvedProfile.site_role)) {
       return showDenied('Bu panel yalnızca moderatör ve yöneticilere açıktır.');
     }
 
@@ -163,8 +172,9 @@
     document.getElementById('moderation-loading')?.setAttribute('hidden','');
     document.getElementById('moderation-app')?.removeAttribute('hidden');
     document.getElementById('moderation-denied')?.setAttribute('hidden','');
+
     const roleEl = document.getElementById('mod-role');
-    if (roleEl) roleEl.textContent = roleText(role);
+    if (roleEl) roleEl.textContent = resolvedProfile.site_role === 'admin' ? 'Kurucu' : 'Moderatör';
 
     bindControls();
     await Promise.all([loadMessages(), loadUsers(), loadChatLock()]);
@@ -201,7 +211,8 @@
     state.textContent = locked ? 'Kilitli — yalnızca moderatörler ve yöneticiler yazabilir.' : 'Açık — herkes yazabilir.';
     state.dataset.locked = String(locked);
     button.textContent = locked ? 'Sohbeti Aç' : 'Sohbeti Kilitle';
-    button.classList.toggle('danger-button', !locked);
+    button.classList.add('danger-button');
+    button.classList.toggle('is-locked', locked);
   }
 
   async function toggleChatLock() {
@@ -232,6 +243,28 @@
     }
   }
 
+  const targetRoleCache = new Map();
+
+  async function getTargetRole(userId) {
+    if (!userId) return 'user';
+    if (targetRoleCache.has(userId)) return targetRoleCache.get(userId);
+    const {data,error} = await client.from('profiles').select('id,site_role').eq('id',userId).maybeSingle();
+    if (error || !data) return null;
+    const role = String(data.site_role || 'user').trim().toLowerCase();
+    targetRoleCache.set(userId, role);
+    return role;
+  }
+
+  async function canDeleteMessage(msg) {
+    const actorRole = String(myProfile?.site_role || 'user').trim().toLowerCase();
+    if (!['admin','moderator'].includes(actorRole)) return false;
+    if (!msg?.user_id) return true;
+    if (String(msg.user_id) === String(me?.id || '')) return true;
+    const targetRole = await getTargetRole(msg.user_id);
+    if (!targetRole) return false;
+    return actorRole === 'admin' || targetRole === 'user';
+  }
+
   async function loadMessages() {
     const box = document.getElementById('mod-messages');
     if (!box) return;
@@ -246,6 +279,12 @@
       return;
     }
 
+    const ids = [...new Set((data || []).map(m => m.user_id).filter(Boolean))];
+    if (ids.length) {
+      const {data:profiles} = await client.from('profiles').select('id,site_role').in('id',ids);
+      (profiles || []).forEach(p => targetRoleCache.set(p.id,String(p.site_role || 'user').trim().toLowerCase()));
+    }
+
     box.innerHTML = '';
     if (!data?.length) {
       box.innerHTML = '<div class="empty-panel">Henüz mesaj yok.</div>';
@@ -253,6 +292,8 @@
     }
 
     for (const msg of data) {
+      const allowed = await canDeleteMessage(msg);
+      const targetRole = msg.user_id ? (await getTargetRole(msg.user_id) || 'user') : 'user';
       const row = document.createElement('article');
       row.className = 'mod-item reveal';
       row.dataset.messageId = msg.id;
@@ -260,25 +301,34 @@
         <div class="mod-main">
           <div class="mod-meta">
             <strong>${esc(msg.username || 'Anonim')}</strong>
-            ${msg.user_id ? '' : '<span class="chat-guest-badge">Misafir</span>'}
+            ${msg.user_id ? `<span class="chat-guest-badge">${esc(roleText(targetRole))}</span>` : '<span class="chat-guest-badge">Misafir</span>'}
             <time>${esc(formatDate(msg.created_at))}</time>
           </div>
           <p>${esc(msg.message)}</p>
         </div>
         <div class="mod-actions">
-          <button class="danger-button" type="button" data-delete-message>Mesajı Sil</button>
-
+          ${allowed ? '<button class="danger-button" type="button" data-delete-message>Mesajı Sil</button>' : '<span class="state-pill">Bu mesajı silme yetkin yok</span>'}
         </div>`;
-      row.querySelector('[data-delete-message]').onclick = async () => {
-        const {error:delError} = await client.rpc('moderation_delete_message',{target_message_id:msg.id});
-        if (delError) { alert(delError.message || 'Mesaj silinemedi.'); return; }
-        row.classList.add('chat-message-out');
-        setTimeout(()=>row.remove(),180);
-      };
+
+      row.querySelector('[data-delete-message]')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const {error:delError} = await client.rpc('moderation_delete_message',{target_message_id:msg.id});
+          if (delError) throw delError;
+          row.classList.add('chat-message-out');
+          setTimeout(()=>row.remove(),180);
+        } catch(error) {
+          button.disabled = false;
+          alert(error?.message || 'Mesaj silinemedi.');
+        }
+      });
+
       box.appendChild(row);
       requestAnimationFrame(() => row.classList.add('in-view'));
     }
   }
+
 
   async function loadUsers() {
     const box = document.getElementById('mod-users');
