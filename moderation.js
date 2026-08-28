@@ -152,7 +152,10 @@
     resolvedProfile.site_role = String(resolvedProfile.site_role || '').trim().toLowerCase();
     myProfile = resolvedProfile;
 
-    if (!['admin','moderator'].includes(profile.site_role)) {
+    // Always authorize against the resolved profile (which can come from the
+    // shell fallback when the full/fallback query is temporarily unavailable).
+    const role = resolvedProfile.site_role;
+    if (!['admin','moderator'].includes(role)) {
       return showDenied('Bu panel yalnızca moderatör ve yöneticilere açıktır.');
     }
 
@@ -161,7 +164,7 @@
     document.getElementById('moderation-app')?.removeAttribute('hidden');
     document.getElementById('moderation-denied')?.setAttribute('hidden','');
     const roleEl = document.getElementById('mod-role');
-    if (roleEl) roleEl.textContent = roleText(profile.site_role);
+    if (roleEl) roleEl.textContent = roleText(role);
 
     bindControls();
     await Promise.all([loadMessages(), loadUsers(), loadChatLock()]);

@@ -65,7 +65,7 @@
     blockedUsers = new Set(blockedUserIds);
     await loadChatLockState();
     ensureTypingUI();
-    setupNotificationControls();
+    setupChatControls();
     bindAuthEvents();
     setupComposer();
     updateComposer();
@@ -128,12 +128,14 @@
       presenceChannel = null;
       await syncMessages({initial:false});
       subscribePresence();
+      setupChatControls();
       updateComposer();
     });
 
     window.addEventListener('atlantis-profile-updated', async event => {
       currentProfile = event.detail?.profile || currentProfile;
       if (currentProfile?.id) profileCache.set(currentProfile.id,currentProfile);
+      setupChatControls();
       updateComposer();
       await syncMessages({initial:false});
       subscribePresence();
@@ -464,7 +466,7 @@
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'chat_settings',filter:'id=eq.1'},payload => {
         chatLocked = !!payload.new?.chat_locked;
         updateComposer();
-        updateNotificationControls();
+        updateChatControls();
       })
       .on('broadcast',{event:'typing'},payload => {
         if (payload.payload?.presence_key === presenceKey()) return;
@@ -737,7 +739,7 @@
       chatLocked = false;
     }
     updateComposer();
-    updateNotificationControls();
+    updateChatControls();
   }
 
 
@@ -944,78 +946,112 @@
   }
 
 
-  function setupNotificationControls() {
+  function setupChatControls() {
     const head = document.querySelector('.chat-head');
-    if (!head || document.getElementById('chat-tools')) return;
-    const tools = document.createElement('div');
-    tools.id = 'chat-tools';
-    tools.className = 'chat-tools';
-    tools.innerHTML = `<button id="chat-notify" class="ghost-button" type="button" aria-pressed="false">Bildirimler Kapalı</button><button id="chat-sound" class="ghost-button" type="button" aria-pressed="false">Etiket Sesi Kapalı</button>${['admin','moderator'].includes(String(currentProfile?.site_role||'')) ? '<button id="chat-lock" class="ghost-button" type="button">Sohbet Kilidi</button>' : ''}`;
-    head.appendChild(tools);
+    if (!head) return;
 
-    document.getElementById('chat-notify').onclick = async () => {
-      if (!('Notification' in window)) return toast('Bu tarayıcı bildirimleri desteklemiyor.');
-      const permission = Notification.permission;
-      if (permission === 'granted') {
-        const next = localStorage.getItem('atlantis-chat-notifications') !== '1';
-        localStorage.setItem('atlantis-chat-notifications', next ? '1' : '0');
-        updateNotificationControls();
-        return;
-      }
-      if (permission === 'denied') {
-        localStorage.setItem('atlantis-chat-notifications','0');
-        updateNotificationControls();
-        toast('Bildirim izni tarayıcıdan kapalı. Site ayarlarından izin verebilirsin.');
-        return;
-      }
-      const result = await Notification.requestPermission();
-      localStorage.setItem('atlantis-chat-notifications', result === 'granted' ? '1' : '0');
-      updateNotificationControls();
-    };
-    document.getElementById('chat-sound').onclick = () => {
-      const enabled = localStorage.getItem('atlantis-chat-sound') === '1';
-      const next = !enabled;
-      localStorage.setItem('atlantis-chat-sound', next ? '1' : '0');
-      if (next) {
-        // Kullanıcı butona bastığı için tarayıcının ses kilidini açabiliriz.
-        // Açarken bir kez kısa test sesi çalar; sonraki sesler yalnızca gerçek etiketlerde gelir.
-        ensureAudioReady();
-        playSound(true, false);
-      }
-      updateNotificationControls();
-    };
-    document.getElementById('chat-lock')?.addEventListener('click', async () => {
-      const { data: locked, error } = await client.rpc('is_chat_locked');
-      if (error) return toast(error.message || 'Kilit durumu alınamadı.');
-      const result = await client.rpc('moderation_set_chat_lock',{lock_chat:!locked});
-      if (result.error) return toast(result.error.message || 'Kilit değiştirilemedi.');
-      chatLocked = !locked;
-      toast(locked ? 'Sohbet açıldı.' : 'Sohbet kilitlendi.');
-      updateComposer();
-      updateNotificationControls();
-    });
-    updateNotificationControls();
+    let tools = document.getElementById('chat-tools');
+    if (!tools) {
+      tools = document.createElement('div');
+      tools.id = 'chat-tools';
+      tools.className = 'chat-tools';
+      head.appendChild(tools);
+    }
+
+    if (!tools.querySelector('#chat-sound')) {
+      const soundButton = document.createElement('button');
+      soundButton.id = 'chat-sound';
+      soundButton.className = 'ghost-button';
+      soundButton.type = 'button';
+      soundButton.setAttribute('aria-pressed','false');
+      soundButton.textContent = 'Etiket Sesi Kapalı';
+      tools.appendChild(soundButton);
+    }
+
+    const role = String(currentProfile?.site_role || '').trim().toLowerCase();
+    const canClear = !!currentUser && ['admin','moderator'].includes(role);
+
+    let clearButton = document.getElementById('chat-clear');
+    if (canClear && !clearButton) {
+      clearButton = document.createElement('button');
+      clearButton.id = 'chat-clear';
+      clearButton.className = 'ghost-button danger-button';
+      clearButton.type = 'button';
+      clearButton.textContent = 'Sohbeti Temizle';
+      clearButton.setAttribute('title','Sohbetteki tüm mesajları temizle');
+      clearButton.addEventListener('click', clearChat);
+      tools.appendChild(clearButton);
+    } else if (!canClear) {
+      clearButton?.remove();
+    }
+
+    const sound = document.getElementById('chat-sound');
+    if (sound && sound.dataset.bound !== '1') {
+      sound.dataset.bound = '1';
+      sound.addEventListener('click', () => {
+        const enabled = localStorage.getItem('atlantis-chat-sound') === '1';
+        const next = !enabled;
+        localStorage.setItem('atlantis-chat-sound', next ? '1' : '0');
+        if (next) {
+          ensureAudioReady();
+          playSound(true, false);
+        }
+        updateChatControls();
+      });
+    }
+
+    updateChatControls();
   }
 
-  function updateNotificationControls() {
-    const n = document.getElementById('chat-notify');
+  function updateChatControls() {
     const s = document.getElementById('chat-sound');
-    const notificationSupported = 'Notification' in window;
-    const permission = notificationSupported ? Notification.permission : 'denied';
-    const notificationEnabled = permission === 'granted' && localStorage.getItem('atlantis-chat-notifications') === '1';
+    const clearButton = document.getElementById('chat-clear');
+    const role = String(currentProfile?.site_role || '').trim().toLowerCase();
+    const canClear = !!currentUser && ['admin','moderator'].includes(role);
     const soundEnabled = localStorage.getItem('atlantis-chat-sound') === '1';
 
-    if (n) {
-      n.textContent = notificationEnabled ? 'Bildirimler Açık' : 'Bildirimler Kapalı';
-      n.setAttribute('aria-pressed',String(notificationEnabled));
-      n.classList.toggle('is-enabled',notificationEnabled);
-      n.classList.toggle('is-disabled',!notificationEnabled);
-    }
     if (s) {
       s.textContent = soundEnabled ? 'Etiket Sesi Açık' : 'Etiket Sesi Kapalı';
-      s.setAttribute('aria-pressed',String(soundEnabled));
-      s.classList.toggle('is-enabled',soundEnabled);
-      s.classList.toggle('is-disabled',!soundEnabled);
+      s.setAttribute('aria-pressed', String(soundEnabled));
+      s.classList.toggle('is-enabled', soundEnabled);
+      s.classList.toggle('is-disabled', !soundEnabled);
+    }
+
+    if (clearButton) {
+      clearButton.hidden = !canClear;
+      clearButton.disabled = !canClear;
+    }
+  }
+
+  async function clearChat() {
+    const role = String(currentProfile?.site_role || '').trim().toLowerCase();
+    if (!currentUser || !['admin','moderator'].includes(role)) {
+      return toast('Sohbet temizleme yetkin yok.');
+    }
+    if (!confirm('Sohbetteki tüm mesajlar silinsin mi? Bu işlem geri alınamaz.')) return;
+
+    const button = document.getElementById('chat-clear');
+    if (!button) return;
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Temizleniyor…';
+
+    try {
+      const { data, error } = await client.rpc('moderation_clear_chat');
+      if (error) throw error;
+
+      // Re-fetch immediately so the local view is cleared even if realtime
+      // DELETE events arrive slightly later.
+      await syncMessages({initial:false});
+      const count = Number(data);
+      toast(Number.isFinite(count) ? `${count} mesaj temizlendi.` : 'Sohbet temizlendi.');
+    } catch (error) {
+      toast(error?.message || 'Sohbet temizlenemedi.');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+      updateChatControls();
     }
   }
 
@@ -1067,22 +1103,9 @@
 
   function handleIncomingAlert(message, mentioned=false) {
     // Etiket sesi yalnızca kullanıcı gerçekten @ile etiketlendiyse çalışır.
+    // Tarayıcı bildirimleri kaldırıldı; yalnızca etiket sesi kullanılabilir.
     if (mentioned && localStorage.getItem('atlantis-chat-sound') === '1') {
       playSound(false,true);
-    }
-
-    // Tarayıcı bildirimi sesle karıştırılmaz; bildirim ayarı açıksa yeni mesajlar için
-    // yalnızca sekme arka plandayken gösterilir.
-    if (
-      document.hidden &&
-      localStorage.getItem('atlantis-chat-notifications') === '1' &&
-      'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
-      new Notification(`Atlantis MC — ${message.username || 'Anonim'}`, {
-        body: String(message.message || ''),
-        tag: `atlantis-${message.id}`
-      });
     }
   }
 
