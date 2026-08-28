@@ -19,6 +19,8 @@
   let client = null;
   let currentUser = null;
   let currentProfile = {};
+  let chatLocked = false;
+  let chatLockChannelActive = false;
   let chatChannel = null;
   let presenceChannel = null;
   let initialized = false;
@@ -59,10 +61,12 @@
     await readIdentity();
     await withTimeout(loadBlockedUsers(), 5000, 'Engel listesi alınamadı.').catch(() => { blockedUserIds = new Set(); });
     blockedUsers = new Set(blockedUserIds);
+    await loadChatLockState();
     ensureTypingUI();
     setupNotificationControls();
     bindAuthEvents();
     setupComposer();
+    updateComposer();
     await syncMessages({initial:true});
     subscribeChat();
     subscribePresence();
@@ -93,6 +97,7 @@
   function bindAuthEvents() {
     window.addEventListener('atlantis-auth-login', async () => {
       await refreshIdentityOnly();
+      await loadChatLockState();
       await withTimeout(loadBlockedUsers(), 5000, 'Engel listesi alınamadı.').catch(() => { blockedUserIds = new Set(); });
       blockedUsers = new Set(blockedUserIds);
       await syncMessages({initial:false});
@@ -105,6 +110,7 @@
     window.addEventListener('atlantis-auth-logout', async () => {
       currentUser = null;
       currentProfile = {};
+      chatLocked = false;
       profileCache.clear();
       blockedUsers.clear();
       blockedUserIds.clear();
@@ -447,6 +453,11 @@
         item.classList.add('chat-message-out');
         setTimeout(()=>item.remove(),180);
       })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'chat_settings',filter:'id=eq.1'},payload => {
+        chatLocked = !!payload.new?.chat_locked;
+        updateComposer();
+        updateNotificationControls();
+      })
       .on('broadcast',{event:'typing'},payload => {
         if (payload.payload?.presence_key === presenceKey()) return;
         if (payload.payload?.typing) showTyping(payload.payload.username || 'Birisi');
@@ -526,6 +537,7 @@
     form.dataset.atlantisFinalBound = '1';
 
     input.addEventListener('input',() => {
+      if (!canWriteToChat()) return;
       broadcastTyping(true);
       clearTimeout(typingTimer);
       typingTimer = setTimeout(()=>broadcastTyping(false),900);
@@ -534,6 +546,10 @@
 
     form.onsubmit = async event => {
       event.preventDefault();
+      if (!canWriteToChat()) {
+        toast(chatLocked ? 'Sohbet şu anda yalnızca moderatörler ve yöneticiler için açık.' : 'Şu anda mesaj gönderemezsin.');
+        return;
+      }
       const text = input.value.trim();
       if (!text) return;
       if (text.length > 300) return toast('Mesaj en fazla 300 karakter olabilir.');
@@ -586,16 +602,61 @@
     };
   }
 
+  function canWriteToChat() {
+    if (!chatLocked) return true;
+    return ['admin','moderator'].includes(String(currentProfile?.site_role || ''));
+  }
+
   function updateComposer() {
     const input = document.getElementById('chat-input');
     const button = document.querySelector('#chat-form button');
+    const form = document.getElementById('chat-form');
     if (!input) return;
 
     const muted = currentProfile?.muted_until && new Date(currentProfile.muted_until) > new Date();
-    input.disabled = !!muted;
-    if (button && !button.classList.contains('is-sending')) button.disabled = !!muted;
-    input.placeholder = muted ? 'Sohbet kullanımın geçici olarak kısıtlandı.' : currentUser ? 'Mesajını yaz…' : 'Anonim olarak mesajını yaz…';
+    const lockedForUser = chatLocked && !['admin','moderator'].includes(String(currentProfile?.site_role || ''));
+    const disabled = !!muted || !!lockedForUser;
+
+    input.disabled = disabled;
+    if (button && !button.classList.contains('is-sending')) button.disabled = disabled;
+    input.placeholder = muted
+      ? 'Sohbet kullanımın geçici olarak kısıtlandı.'
+      : lockedForUser
+        ? 'Sohbet kilitli — yalnızca moderatörler ve yöneticiler yazabilir.'
+        : currentUser ? 'Mesajını yaz…' : 'Anonim olarak mesajını yaz…';
+
+    if (form) {
+      form.setAttribute('aria-disabled', String(disabled));
+      form.classList.toggle('chat-form-locked', !!lockedForUser);
+      let status = document.getElementById('chat-lock-status');
+      if (lockedForUser) {
+        if (!status) {
+          status = document.createElement('div');
+          status.id = 'chat-lock-status';
+          status.className = 'chat-lock-banner';
+          form.parentNode?.insertBefore(status, form);
+        }
+        status.textContent = '🔒 Sohbet kilitli — yalnızca moderatörler ve yöneticiler mesaj gönderebilir.';
+      } else {
+        status?.remove();
+      }
+    }
   }
+
+  async function loadChatLockState() {
+    try {
+      const { data, error } = await client.rpc('is_chat_locked');
+      if (error) throw error;
+      chatLocked = !!data;
+    } catch (error) {
+      console.warn('[Atlantis Chat] chat lock state:', error);
+      chatLocked = false;
+    }
+    updateComposer();
+    updateNotificationControls();
+  }
+
+
 
   async function broadcastTyping(typing) {
     if (!chatChannel) return;
@@ -751,17 +812,28 @@
 
   async function openModerationActions(message) {
     if (!currentUser || !['admin','moderator'].includes(String(currentProfile?.site_role || '')) || !message.user_id) return;
+    const target = profileCache.get(message.user_id) || {};
+    const targetRole = String(target.site_role || 'user');
+    const actorRole = String(currentProfile?.site_role || 'user');
+    if (String(message.user_id) === String(currentUser.id)) return;
+    const canAct = targetRole !== 'admin' && !(actorRole === 'moderator' && targetRole === 'moderator');
     const name = displayName(message);
+    const muteOptions = [
+      [0,'Susturmayı kaldır'],[300,'5 dk'],[600,'10 dk'],[1200,'20 dk'],[1800,'30 dk'],
+      [2700,'45 dk'],[3600,'1 saat'],[7200,'2 saat'],[10800,'3 saat'],[86400,'1 gün'],
+      [259200,'3 gün'],[432000,'5 gün'],[-1,'Kalıcı']
+    ].map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
     const overlay = openChatDialog({
       title:'Kullanıcıyı Yönet',
-      subtitle:`${name} için moderasyon işlemi seç.`,
+      subtitle: canAct ? `${name} için moderasyon işlemi seç.` : `${name} için işlem yapma yetkin yok.`,
       content:`<div class="chat-mod-grid">
-        <button type="button" class="danger-button" data-mod-delete>Mesajı Sil</button>
-        <button type="button" class="secondary-button" data-mod-mute>5 dk sustur</button>
-        <button type="button" class="secondary-button" data-mod-mute30>30 dk sustur</button>
-        <button type="button" class="secondary-button" data-mod-mute1h>1 saat sustur</button>
-        <button type="button" class="danger-button" data-mod-ban>1 saat site banı</button>
-        <button type="button" class="secondary-button" data-mod-unmute>Yasağı / susturmayı kaldır</button>
+        ${canAct ? `
+          <button type="button" class="danger-button" data-mod-delete>Mesajı Sil</button>
+          <select data-mod-mute aria-label="Susturma süresi">${muteOptions}</select>
+          <input class="mod-custom-duration" data-mod-custom type="number" min="1" step="1" placeholder="Özel dakika" aria-label="Özel susturma süresi dakika">
+          <button type="button" class="secondary-button" data-mod-apply>Uygula</button>
+          <button type="button" class="danger-button" data-mod-ban>1 saat site banı</button>
+          <button type="button" class="secondary-button" data-mod-unmute>Susturmayı kaldır</button>` : '<div class="empty-panel">Bu kullanıcı moderatör/yönetici hiyerarşisinde korunuyor.</div>'}
       </div><div class="auth-message" data-mod-message></div>`
     });
     const msgBox=overlay.querySelector('[data-mod-message]');
@@ -772,16 +844,21 @@
         if(action.type==='ban'){ const {error}=await client.rpc('moderation_set_ban',{target_user_id:message.user_id,duration_seconds:action.seconds,reason:'Sohbet moderasyonu'}); if(error) throw error; }
         msgBox.textContent=action.ok; msgBox.className='auth-message success';
         if(action.type==='delete'){document.getElementById(`chat-message-${message.id}`)?.remove();}
-        setTimeout(()=>overlay.remove(),500);
+        setTimeout(()=>overlay.remove(),400);
       }catch(e){msgBox.textContent=e?.message||'İşlem başarısız.'; msgBox.className='auth-message error';}
     };
-    overlay.querySelector('[data-mod-delete]').onclick=()=>run({type:'delete',ok:'Mesaj silindi.'});
-    overlay.querySelector('[data-mod-mute]').onclick=()=>run({type:'mute',seconds:300,ok:'Kullanıcı 5 dakika susturuldu.'});
-    overlay.querySelector('[data-mod-mute30]').onclick=()=>run({type:'mute',seconds:1800,ok:'Kullanıcı 30 dakika susturuldu.'});
-    overlay.querySelector('[data-mod-mute1h]').onclick=()=>run({type:'mute',seconds:3600,ok:'Kullanıcı 1 saat susturuldu.'});
-    overlay.querySelector('[data-mod-ban]').onclick=()=>run({type:'ban',seconds:3600,ok:'Kullanıcı 1 saat siteye banlandı.'});
-    overlay.querySelector('[data-mod-unmute]').onclick=()=>run({type:'mute',seconds:0,ok:'Susturma kaldırıldı.'});
+    overlay.querySelector('[data-mod-delete]')?.addEventListener('click',()=>run({type:'delete',ok:'Mesaj silindi.'}));
+    overlay.querySelector('[data-mod-apply]')?.addEventListener('click',()=>{
+      const selected=Number(overlay.querySelector('[data-mod-mute]')?.value ?? 0);
+      const customMinutes=Number(overlay.querySelector('[data-mod-custom]')?.value ?? 0);
+      const seconds=customMinutes>0 ? Math.floor(customMinutes*60) : selected;
+      if(!Number.isFinite(seconds) || seconds < -1){msgBox.textContent='Geçerli bir süre seç.';msgBox.className='auth-message error';return;}
+      run({type:'mute',seconds,ok:seconds===0?'Susturma kaldırıldı.':seconds===-1?'Kullanıcı kalıcı susturuldu.':'Kullanıcı susturuldu.'});
+    });
+    overlay.querySelector('[data-mod-ban]')?.addEventListener('click',()=>run({type:'ban',seconds:3600,ok:'Kullanıcı 1 saat siteye banlandı.'}));
+    overlay.querySelector('[data-mod-unmute]')?.addEventListener('click',()=>run({type:'mute',seconds:0,ok:'Susturma kaldırıldı.'}));
   }
+
 
   function setupNotificationControls() {
     const head = document.querySelector('.chat-head');
@@ -828,6 +905,7 @@
       if (error) return toast(error.message || 'Kilit durumu alınamadı.');
       const result = await client.rpc('moderation_set_chat_lock',{lock_chat:!locked});
       if (result.error) return toast(result.error.message || 'Kilit değiştirilemedi.');
+      chatLocked = !locked;
       toast(locked ? 'Sohbet açıldı.' : 'Sohbet kilitlendi.');
       updateComposer();
       updateNotificationControls();

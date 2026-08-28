@@ -21,7 +21,7 @@
 <section id="moderation-loading" class="panel reveal"><div class="moderation-loading">Yetki kontrol ediliyor...</div></section>
 <section id="moderation-denied" class="panel moderation-denied" hidden><h2>Erişim yok</h2><p data-denied-text></p><a class="primary-button wide" href="index.html">Ana Sayfaya Dön</a></section>
 <section id="moderation-app" hidden>
-<div class="panel reveal moderation-control-bar"><div><span class="section-label">CANLI SOHBET</span><h2>Sohbet Kontrolü</h2><span id="mod-chat-lock-state" class="mod-lock-state">Durum okunuyor...</span></div><button id="mod-chat-lock" class="danger-button" type="button">Sohbeti Kilitle</button></div>
+<div class="panel reveal moderation-control-bar"><div><span class="section-label">CANLI SOHBET</span><h2>Sohbet Kontrolü</h2><span id="mod-chat-lock-state" class="mod-lock-state">Durum okunuyor...</span></div><div class="mod-control-actions"><button id="mod-chat-lock" class="danger-button" type="button">Sohbeti Kilitle</button><button id="mod-chat-clear" class="danger-button" type="button">Sohbeti Temizle</button></div></div>
 <div class="moderation-grid">
 <div class="panel reveal"><div class="panel-head"><div><span class="section-label">SOHBET</span><h2>Mesajlar</h2><span class="mod-role" id="mod-role"></span></div><button id="mod-refresh" class="secondary-button" type="button">↻ Yenile</button></div><div id="mod-messages" class="mod-list"></div></div>
 <div class="panel reveal"><div class="panel-head"><div><span class="section-label">TOPLULUK</span><h2>Kullanıcılar</h2></div></div><div id="mod-users" class="mod-list"></div></div>
@@ -33,5 +33,4 @@
 <script src="supabase-config.js?v=atlantis-perffix-1"></script><script>window.dispatchEvent(new Event('supabase-ready'));</script>
 <script src="auth.js?v=atlantis-perffix-1" defer></script><script src="script.js?v=atlantis-perffix-1" defer></script><script src="moderation.js?v=atlantis-perffix-1" defer></script>
 <script src="atlantis-effects.js?v=atlantis-perffix-1" defer></script>
-<script src="atlantis-social-features.js?v=atlantis-perffix-1"></script>
 </body></html>

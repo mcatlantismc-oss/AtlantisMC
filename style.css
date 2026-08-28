@@ -1054,7 +1054,7 @@ body.atlantis-page-leaving{opacity:1!important;transform:none!important;transiti
   background:rgba(2,8,18,.78);
   backdrop-filter:blur(8px);
   opacity:0;
-  transition:opacity .12s ease;
+  transition:opacity .22s ease;
 }
 .atlantis-social-overlay.is-visible{opacity:1}
 .atlantis-social-card{
@@ -1068,7 +1068,7 @@ body.atlantis-page-leaving{opacity:1!important;transform:none!important;transiti
   box-shadow:0 30px 100px rgba(0,0,0,.58),0 0 60px rgba(58,169,255,.12);
   transform:translateY(8px) scale(.985);
   opacity:.96;
-  transition:transform .12s cubic-bezier(.2,.8,.2,1),opacity .12s ease;
+  transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .22s ease;
 }
 .atlantis-social-overlay.is-visible .atlantis-social-card{
   transform:none;
@@ -1206,7 +1206,7 @@ body.atlantis-page-leaving{opacity:1!important;transform:none!important;transiti
   border-radius:12px;
   background:rgba(5,17,32,.98);
   color:var(--text);
-  transition:opacity .12s ease,transform .12s ease;
+  transition:opacity .22s ease,transform .22s ease;
 }
 .atlantis-social-toast.is-visible{opacity:1;transform:translate(-50%,0)}
 @media(max-width:640px){
@@ -1219,17 +1219,27 @@ body.atlantis-page-leaving{opacity:1!important;transform:none!important;transiti
 
 
 /* ===== ATLANTIS MC PERFORMANCE PASS =====
-   Keeps the visual motion but removes expensive/redundant work on navigation. */
+   Smooth, short motion using only opacity/transform for mobile-friendly FPS. */
 html{scroll-behavior:auto!important}
 body.atlantis-page-ready{animation:none!important}
-.reveal.in-view{animation-duration:.10s!important;animation-delay:0s!important}
+.reveal.in-view{animation-duration:.22s!important;animation-delay:0s!important}
 .site-bg{will-change:auto!important}
 .network-bg{will-change:auto!important}
-/* The menu still animates, but items enter almost immediately. */
 @media (max-width:760px){
-  body.menu-open .site-nav a{animation-duration:.10s!important}
-}
-/* Keep modal blur light on mobile/low-power devices. */
-@media (max-width:760px){
+  body.menu-open .site-nav a{animation-duration:.24s!important}
   .auth-backdrop,.chat-action-backdrop,.atlantis-social-overlay{backdrop-filter:blur(3px)!important}
+}
+
+/* Moderation controls */
+.mod-control-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.mod-custom-duration{min-width:118px;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(2,10,22,.82);color:var(--text);font:inherit}
+.chat-lock-banner{margin:0 0 10px;padding:10px 13px;border:1px solid rgba(255,198,88,.22);border-radius:12px;background:rgba(255,198,88,.07);color:#ffe1a0;font-size:.86rem;line-height:1.45}
+.chat-form-locked{opacity:.82}
+.atlantis-social-mute-row{display:grid;grid-template-columns:minmax(140px,1fr) minmax(110px,.8fr) auto;gap:8px;align-items:center}
+.atlantis-social-mute-row select,.atlantis-social-mute-row input{min-width:0;padding:9px 10px;border:1px solid rgba(127,216,255,.16);border-radius:10px;background:rgba(2,10,22,.7);color:var(--text);font:inherit}
+@media(max-width:640px){
+  .mod-control-actions{width:100%;justify-content:flex-start}
+  .mod-control-actions button{flex:1}
+  .atlantis-social-mute-row{grid-template-columns:1fr}
+  .atlantis-social-mute-row .atlantis-social-small{width:100%}
 }

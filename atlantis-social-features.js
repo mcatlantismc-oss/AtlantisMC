@@ -15,6 +15,21 @@
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
   }[ch]));
 
+  const MUTE_OPTIONS = [
+    {value:0,label:'Susturmayı kaldır'},
+    {value:300,label:'5 dakika'}, {value:600,label:'10 dakika'}, {value:1200,label:'20 dakika'},
+    {value:1800,label:'30 dakika'}, {value:2700,label:'45 dakika'}, {value:3600,label:'1 saat'},
+    {value:7200,label:'2 saat'}, {value:10800,label:'3 saat'}, {value:86400,label:'1 gün'},
+    {value:259200,label:'3 gün'}, {value:432000,label:'5 gün'}, {value:-1,label:'Kalıcı'}
+  ];
+
+  const canModerateTarget = (myRole,targetRole) => {
+    if (!['admin','moderator'].includes(String(myRole || ''))) return false;
+    if (String(targetRole || 'user') === 'admin') return false;
+    if (String(myRole) === 'moderator' && String(targetRole || 'user') === 'moderator') return false;
+    return true;
+  };
+
   const toast = (message) => {
     let el = document.getElementById('atlantis-social-toast');
     if (!el) {
@@ -52,13 +67,20 @@
   }
 
   async function fetchProfile(client, userId, fallbackName='Oyuncu') {
-    const { data } = await client
+    const full = await client
+      .from('profiles')
+      .select('id,username,avatar_url,bio,site_role,last_seen,created_at,muted_until')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!full.error) return full.data || { id:userId, username:fallbackName, avatar_url:null, bio:'', site_role:'user' };
+
+    console.warn('[Atlantis Social] profile fallback:', full.error);
+    const fallback = await client
       .from('profiles')
       .select('id,username,avatar_url,bio,site_role,last_seen,created_at')
       .eq('id', userId)
       .maybeSingle();
-
-    return data || { id:userId, username:fallbackName, avatar_url:null, bio:'', site_role:'user' };
+    return fallback.data || { id:userId, username:fallbackName, avatar_url:null, bio:'', site_role:'user' };
   }
 
   async function getState(client, me, targetId) {
@@ -114,6 +136,15 @@
       }, { onConflict:'user_id,target_user_id' });
 
     if (error) throw error;
+  }
+
+  async function setMute(client, me, targetId, seconds) {
+    const { error } = await client.rpc('moderation_set_mute', {
+      target_user_id: targetId,
+      duration_seconds: seconds
+    });
+    if (error) throw error;
+    return seconds;
   }
 
   async function toggleBlock(client, me, targetId, active) {
@@ -194,6 +225,17 @@
             <b>${state.blocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}</b>
             <small>${state.blocked ? 'Bu kişinin mesajları tekrar görünür.' : 'Engellediğinde bu kişinin sohbet mesajlarını sen görmezsin.'}</small>
           </button>
+
+          ${canModerateTarget(profile._myRole || '', role) ? `
+            <div class="atlantis-social-note-wrap atlantis-social-moderation-wrap">
+              <label for="atlantis-profile-mute">🛡️ Moderasyon · Susturma</label>
+              <div class="atlantis-social-mute-row">
+                <select id="atlantis-profile-mute">${MUTE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}</select>
+                <input id="atlantis-profile-mute-custom" type="number" min="1" step="1" placeholder="Özel dakika" aria-label="Özel susturma süresi dakika">
+                <button type="button" id="atlantis-profile-mute-apply" class="atlantis-social-small">Uygula</button>
+              </div>
+              <small>Moderatörler başka moderatörleri/yöneticileri susturamaz. Yöneticiler moderatörleri susturabilir.</small>
+            </div>` : ''}
         </div>
 
         <button type="button" class="atlantis-social-closewide">✓ Profili Kapat</button>
@@ -262,6 +304,25 @@
         console.error(error);
       }
     });
+
+    overlay.querySelector('#atlantis-profile-mute-apply')?.addEventListener('click', async () => {
+      const myRole = String(profile._myRole || 'user');
+      if (!canModerateTarget(myRole, role)) {
+        toast('Bu kullanıcıya susturma uygulayamazsın.');
+        return;
+      }
+      try {
+        const selected = Number(overlay.querySelector('#atlantis-profile-mute')?.value ?? 0);
+        const customMinutes = Number(overlay.querySelector('#atlantis-profile-mute-custom')?.value ?? 0);
+        const seconds = customMinutes > 0 ? Math.floor(customMinutes * 60) : selected;
+        if (!Number.isFinite(seconds) || seconds < -1) throw new Error('Geçerli bir süre seç.');
+        await setMute(client, me, profile.id, seconds);
+        toast(seconds === 0 ? 'Susturma kaldırıldı.' : seconds === -1 ? 'Kullanıcı kalıcı susturuldu.' : 'Kullanıcı susturuldu.');
+      } catch (error) {
+        toast(error?.message || 'Susturma uygulanamadı.');
+        console.error(error);
+      }
+    });
   }
 
   async function openFromTarget(target) {
@@ -280,6 +341,7 @@
         fetchProfile(client, userId, name),
         getState(client, me, userId)
       ]);
+      profile._myRole = String(window.atlantisCurrentProfile?.site_role || window.atlantisAuthSession?.profile?.site_role || 'user');
       renderOverlay(profile, state, me, client);
     } catch (error) {
       toast('Profil bilgileri alınamadı.');

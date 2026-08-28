@@ -69,26 +69,34 @@
     });
   }
 
-  function loadPageScripts(doc){
+  async function loadPageScripts(doc){
     const existing = new Set(
-      [...document.scripts].map(s => (s.getAttribute('src')||'').split('?')[0]).filter(Boolean)
+      [...document.scripts].map(s => (s.getAttribute('src') || '').split('?')[0]).filter(Boolean)
     );
-    const pending = [];
-    doc.querySelectorAll('script[src]').forEach(scriptEl => {
+
+    // Dynamic scripts must be loaded strictly one-by-one. Merely setting
+    // async=false is not sufficient for dynamically inserted scripts with
+    // defer attributes, and was the source of the auth/moderation race.
+    for (const scriptEl of doc.querySelectorAll('script[src]')) {
       const src = scriptEl.getAttribute('src');
-      if (!src) return;
+      if (!src) continue;
       const clean = src.split('?')[0];
-      if (existing.has(clean)) return;
+      if (existing.has(clean)) continue;
       existing.add(clean);
-      pending.push(new Promise(resolve => {
+
+      await new Promise(resolve => {
         const tag = document.createElement('script');
-        [...scriptEl.attributes].forEach(attr => tag.setAttribute(attr.name, attr.value));
-        tag.addEventListener('load', resolve, {once:true});
-        tag.addEventListener('error', resolve, {once:true});
+        [...scriptEl.attributes].forEach(attr => {
+          if (attr.name === 'async' || attr.name === 'defer') return;
+          tag.setAttribute(attr.name, attr.value);
+        });
+        tag.async = false;
+        const done = () => resolve();
+        tag.addEventListener('load', done, {once:true});
+        tag.addEventListener('error', done, {once:true});
         document.body.appendChild(tag);
-      }));
-    });
-    return Promise.all(pending);
+      });
+    }
   }
 
   function stopHomeStatus(){

@@ -308,6 +308,12 @@
     drawer.querySelector('[data-account="password"]')?.addEventListener('click', () => { closeDrawer(); openPasswordChangeModal(); });
     drawer.querySelector('[data-account="email"]')?.addEventListener('click', () => { closeDrawer(); openEmailChangeModal(); });
     drawer.querySelector('[data-account="logout"]')?.addEventListener('click', confirmLogout);
+
+    // SPA navigation keeps the fixed shell alive, so close this temporary
+    // drawer before any in-drawer page link is handled by script.js.
+    drawer.querySelectorAll('a[href]').forEach(link => {
+      link.addEventListener('click', () => closeDrawer(), {once:true});
+    });
   }
 
   function showAccountInfo() {
