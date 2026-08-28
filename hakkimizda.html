@@ -1,5 +1,441 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#071426"><title>Hakkımızda — Atlantis MC</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Mukta:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=atlantis-perffix-1"></head>
-<body data-page="about"><div class="site-bg" aria-hidden="true"></div><div class="network-bg" aria-hidden="true"></div><div class="page-shell"><header class="site-header"><a href="index.html" class="brand"><span class="brand-mark">⚔️</span><span>ATLANTİS MC</span></a><button class="menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false"><span></span><span></span><span></span></button><nav class="site-nav" aria-label="Ana menü"><a href="index.html">Ana Sayfa</a><a href="oy-verme.html">Oy Verme</a><a href="haberler.html">Haberler</a><a href="hakkimizda.html" class="active">Hakkımızda</a><a href="iletisim.html">İletişim</a><a href="sohbet.html">Sohbet Et</a></nav></header>
-<main class="content"><section class="page-hero reveal"><span class="section-label">Atlantis MC</span><h1>Hakkımızda</h1><p>Oyuncu odaklı, modern ve güvenli bir Minecraft topluluğu.</p></section><section class="panel reveal"><div class="about-layout"><div class="about-copy"><span class="section-label">Biz kimiz?</span><p>AtlantisMC uzun yıllar sonra geri dönmüş, modern ve güvenli bir Minecraft deneyimi sunan topluluk odaklı bir sunucudur. Tek isteğimiz oyuncunun mutlu olması ve arkadaşlarıyla iyi bir oyun hikayesi, anısı yazmasıdır.</p><p>Biz para ve kandırmaca odaklı bir server değiliz; bilgi istemeyiz, erişim istemeyiz, sadece oyuncuların rahat olmasını isteriz. Biz diğerleri gibi değiliz. Gönlünüz rahat bir şekilde oynayabilirsiniz.</p><p>Yetkililerimiz ayrımcılık gözetmeden her şeyi kuralına göre yaparlar; ayrımcılık yok, saf adalet vardır. İyi oyunlar oyuncu!</p></div><div class="quote-card"><span class="quote-mark">“</span><strong>Oyuncu mutluysa Atlantis doğru yoldadır.</strong><span>Atlantis MC</span></div></div></section>
-<section class="panel reveal"><div class="panel-head"><div><span class="section-label">Ekip</span><h2>Geliştiriciler</h2></div></div><ul class="team-grid"><li><span>Kurucu</span><strong>Adesq3113</strong></li><li><span>Yönetici</span><strong>OmerEfeAybas</strong></li><li><span>Baş Moderatör</span><strong>Artemis</strong></li><li><span>Moderatör</span><strong>Mert3113</strong></li><li><span>Rehber</span><strong>Light</strong></li></ul></section></main><footer class="site-footer">© 2026 Atlantis MC — Tüm hakları saklıdır.</footer></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=atlantis-perffix-1"></script><script>window.dispatchEvent(new Event('supabase-ready'));</script><script src="auth.js?v=atlantis-perffix-1" defer></script><script src="script.js?v=atlantis-perffix-1" defer></script></body></html>
+<html lang="tr">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#071426">
+
+<title>Hakkımızda | AtlantisMC</title>
+
+<meta
+  name="description"
+  content="AtlantisMC hakkında bilgi edin. Vizyonumuzu, topluluk anlayışımızı, yönetim ekibimizi ve oyuncularımıza sunduğumuz Minecraft deneyimini keşfet."
+>
+
+<meta
+  name="robots"
+  content="index, follow"
+>
+
+<link
+  rel="canonical"
+  href="https://atlantismc.online/hakkimizda.html"
+>
+
+<!-- Open Graph -->
+<meta
+  property="og:type"
+  content="website"
+>
+
+<meta
+  property="og:site_name"
+  content="AtlantisMC"
+>
+
+<meta
+  property="og:title"
+  content="Hakkımızda | AtlantisMC"
+>
+
+<meta
+  property="og:description"
+  content="AtlantisMC'nin hikayesini, vizyonunu ve oyuncu odaklı topluluk anlayışını keşfet."
+>
+
+<meta
+  property="og:url"
+  content="https://atlantismc.online/hakkimizda.html"
+>
+
+<meta
+  property="og:locale"
+  content="tr_TR"
+>
+
+<meta
+  property="og:image"
+  content="https://atlantismc.online/atlantis-mc-og.webp"
+>
+
+<meta
+  property="og:image:alt"
+  content="AtlantisMC"
+>
+
+<!-- Favicon -->
+<link
+  rel="icon"
+  href="atlantis-logo.png"
+  type="image/png"
+>
+
+<link
+  rel="apple-touch-icon"
+  href="atlantis-logo.png"
+>
+
+<!-- Fonts -->
+<link
+  rel="preconnect"
+  href="https://fonts.googleapis.com"
+>
+
+<link
+  rel="preconnect"
+  href="https://fonts.gstatic.com"
+  crossorigin
+>
+
+<link
+  href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Mukta:wght@400;500;600;700;800&display=swap"
+  rel="stylesheet"
+>
+
+<link
+  rel="stylesheet"
+  href="style.css?v=atlantis-about-premium-1"
+>
+
+</head>
+
+<body data-page="about">
+
+<div
+  class="site-bg"
+  aria-hidden="true"
+></div>
+
+<div
+  class="network-bg"
+  aria-hidden="true"
+></div>
+
+<div class="page-shell">
+
+<header class="site-header">
+
+<a
+  href="index.html"
+  class="brand"
+  aria-label="AtlantisMC ana sayfa"
+>
+
+<span class="brand-mark">⚔️</span>
+
+<span>
+ATLANTİS MC
+</span>
+
+</a>
+
+<button
+  class="menu-toggle"
+  type="button"
+  aria-label="Menüyü aç"
+  aria-expanded="false"
+>
+
+<span></span>
+<span></span>
+<span></span>
+
+</button>
+
+<nav
+  class="site-nav"
+  aria-label="Ana menü"
+>
+
+<a href="index.html">
+Ana Sayfa
+</a>
+
+<a href="oy-verme.html">
+Oy Verme
+</a>
+
+<a href="haberler.html">
+Haberler
+</a>
+
+<a
+  href="hakkimizda.html"
+  class="active"
+>
+Hakkımızda
+</a>
+
+<a href="iletisim.html">
+İletişim
+</a>
+
+<a href="sohbet.html">
+Sohbet Et
+</a>
+
+</nav>
+
+</header>
+
+<main class="content">
+
+<section class="page-hero reveal">
+
+<span class="section-label">
+ATLANTIS MC
+</span>
+
+<h1>
+Hakkımızda
+</h1>
+
+<p>
+Bir sunucudan fazlası; oyuncuların kendi hikâyesini yazdığı bir topluluk.
+</p>
+
+</section>
+
+<section class="panel reveal">
+
+<div class="about-layout">
+
+<div class="about-copy">
+
+<span class="section-label">
+BİZ KİMİZ?
+</span>
+
+<h2>
+AtlantisMC'nin hikâyesi
+</h2>
+
+<p>
+AtlantisMC, yıllar sonra yeniden hayat bulan ve Minecraft deneyimini modern, güvenli ve topluluk odaklı bir anlayışla yeniden şekillendiren bir sunucudur.
+</p>
+
+<p>
+Bizim için AtlantisMC yalnızca bir oyun sunucusu değildir. Oyuncuların arkadaşlarıyla birlikte vakit geçirdiği, yeni insanlarla tanıştığı, kendi dünyasını oluşturduğu ve uzun süre hatırlayacağı anılar biriktirdiği yaşayan bir topluluktur.
+</p>
+
+<p>
+Amacımız gösterişli vaatler vermek yerine kaliteli bir oyun deneyimi oluşturmak; oyuncularımızın kendisini rahat, değerli ve güvende hissettiği bir ortam sunmaktır.
+</p>
+
+<p>
+AtlantisMC'de oyuncuların kişisel bilgilerine gereksiz şekilde erişmeye çalışmayız. Şeffaflık, güvenlik, adalet ve topluluk kültürü bizim için temel değerlerdir.
+</p>
+
+<p>
+Yönetim ekibimiz kuralların herkes için eşit uygulanmasına önem verir. Ayrımcılığa değil adalete, karmaşaya değil düzenli bir topluluk yapısına inanıyoruz.
+</p>
+
+</div>
+
+<div class="quote-card">
+
+<span class="quote-mark">
+“
+</span>
+
+<strong>
+Oyuncuların kendisini ait hissettiği bir dünya oluşturmak.
+</strong>
+
+<span>
+AtlantisMC
+</span>
+
+</div>
+
+</div>
+
+</section>
+
+<section class="panel reveal">
+
+<div class="panel-head">
+
+<div>
+
+<span class="section-label">
+VİZYONUMUZ
+</span>
+
+<h2>
+Atlantis'i farklı yapan ne?
+</h2>
+
+</div>
+
+</div>
+
+<div class="feature-points">
+
+<div>
+
+<b>01</b>
+
+<span>
+Oyuncu odaklı ve adil bir topluluk anlayışı
+</span>
+
+</div>
+
+<div>
+
+<b>02</b>
+
+<span>
+Güvenli, düzenli ve sürekli geliştirilen bir oyun deneyimi
+</span>
+
+</div>
+
+<div>
+
+<b>03</b>
+
+<span>
+Oyuncuların fikirleriyle şekillenen yaşayan bir SMP dünyası
+</span>
+
+</div>
+
+</div>
+
+</section>
+
+<section class="panel reveal">
+
+<div class="panel-head">
+
+<div>
+
+<span class="section-label">
+EKİP
+</span>
+
+<h2>
+Geliştiriciler ve yönetim
+</h2>
+
+</div>
+
+</div>
+
+<ul class="team-grid">
+
+<li>
+
+<span>
+Kurucu
+</span>
+
+<strong>
+Adesq3113
+</strong>
+
+</li>
+
+<li>
+
+<span>
+Yönetici
+</span>
+
+<strong>
+OmerEfeAybas
+</strong>
+
+</li>
+
+<li>
+
+<span>
+Baş Moderatör
+</span>
+
+<strong>
+&nbsp;
+</strong>
+
+</li>
+
+<li>
+
+<span>
+Moderatör
+</span>
+
+<strong>
+&nbsp;
+</strong>
+
+</li>
+
+<li>
+
+<span>
+Rehber
+</span>
+
+<strong>
+&nbsp;
+</strong>
+
+</li>
+
+<li>
+
+<span>
+Rehber
+</span>
+
+<strong>
+&nbsp;
+</strong>
+
+</li>
+
+</ul>
+
+</section>
+
+</main>
+
+<footer class="site-footer">
+
+© 2026 AtlantisMC — Tüm hakları saklıdır.
+
+</footer>
+
+</div>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+></script>
+
+<script
+  src="supabase-config.js?v=atlantis-about-premium-1"
+></script>
+
+<script>
+window.dispatchEvent(
+  new Event("supabase-ready")
+);
+</script>
+
+<script
+  src="auth.js?v=atlantis-about-premium-1"
+  defer
+></script>
+
+<script
+  src="script.js?v=atlantis-about-premium-1"
+  defer
+></script>
+
+</body>
+</html>
