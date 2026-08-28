@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#071426">
+<meta name="description" content="AtlantisMC topluluğundaki kullanıcıları ve profilleri keşfet.">
+<title>Kullanıcılar | AtlantisMC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Mukta:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=atlantis-users-1">
+</head>
+<body data-page="users">
+<div class="site-bg" aria-hidden="true"></div><div class="network-bg" aria-hidden="true"></div>
+<div class="page-shell">
+<header class="site-header">
+<a href="index.html" class="brand" aria-label="AtlantisMC ana sayfa"><span class="brand-mark">⚔️</span><span>ATLANTİS MC</span></a>
+<button class="menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false"><span></span><span></span><span></span></button>
+<nav class="site-nav" aria-label="Ana menü">
+<a href="index.html">Ana Sayfa</a><a href="oy-verme.html">Oy Verme</a><a href="haberler.html">Haberler</a><a href="hakkimizda.html">Hakkımızda</a><a href="iletisim.html">İletişim</a><a href="sohbet.html">Sohbet Et</a>
+</nav>
+</header>
+<main class="content">
+<section class="page-hero reveal"><span class="section-label">ATLANTIS TOPLULUĞU</span><h1>Kullanıcılar</h1><p>AtlantisMC topluluğundaki profillere göz at ve oyuncuları keşfet.</p></section>
+<section class="panel reveal">
+<div class="panel-head"><div><span class="section-label">TOPLULUK</span><h2>Oyuncular</h2></div><button class="secondary-button" id="users-refresh" type="button">↻ Yenile</button></div>
+<div class="users-toolbar"><input id="users-search" class="users-search" type="search" placeholder="Kullanıcı ara..." autocomplete="off"></div>
+<div id="users-list" class="community-user-grid"><div class="empty-panel">Kullanıcılar yükleniyor...</div></div>
+</section>
+</main>
+<footer class="site-footer">© 2026 AtlantisMC — Tüm hakları saklıdır.</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js?v=atlantis-users-1"></script>
+<script>window.dispatchEvent(new Event('supabase-ready'));</script>
+<script src="auth.js?v=atlantis-users-1" defer></script>
+<script src="script.js?v=atlantis-users-1" defer></script>
+<script src="kullanicilar.js?v=atlantis-users-1" defer></script>
+</body>
+</html>

@@ -453,11 +453,12 @@
     chatChannel
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},async payload => {
         const id = payload.new?.user_id;
+        const senderBlocked = !!(id && blockedUserIds.has(String(id)) && String(id) !== String(currentUser?.id || ''));
         if (id) await preloadProfiles([id]);
         const nearBottom = isNearBottom();
-        addMessage(payload.new,{animate:true});
-        if (nearBottom) requestAnimationFrame(() => scrollToBottom(true));
-        if (payload.new?.user_id !== currentUser?.id) {
+        if (!senderBlocked) addMessage(payload.new,{animate:true});
+        if (!senderBlocked && nearBottom) requestAnimationFrame(() => scrollToBottom(true));
+        if (!senderBlocked && payload.new?.user_id !== currentUser?.id) {
           const myName = String(currentProfile?.username || currentUser?.user_metadata?.username || '').trim();
           const bodyText = String(payload.new?.message || '');
           const escapedName = myName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -894,9 +895,15 @@
       button.disabled = true;
       button.textContent = 'Siliniyor…';
       try {
-        const result = own
-          ? await client.from('messages').delete().eq('id',message.id).eq('user_id',currentUser.id)
-          : await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)});
+        let result;
+        if (own) {
+          result = await client.from('messages').delete().eq('id',message.id).eq('user_id',currentUser.id);
+        } else {
+          result = await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)});
+          if (result.error && /schema cache|could not find the function|not found/i.test(String(result.error.message || ''))) {
+            result = await client.from('messages').delete().eq('id',message.id);
+          }
+        }
         const { error } = result;
         if (error) throw error;
         const el = document.getElementById(`chat-message-${message.id}`);
@@ -941,7 +948,13 @@
     const msgBox=overlay.querySelector('[data-mod-message]');
     const run=async(action)=>{
       try{
-        if(action.type==='delete'){ const {error}=await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)}); if(error) throw error; }
+        if(action.type==='delete'){
+          let result = await client.rpc('moderation_delete_message_v2',{target_message_id:String(message.id)});
+          if (result.error && /schema cache|could not find the function|not found/i.test(String(result.error.message || ''))) {
+            result = await client.from('messages').delete().eq('id',message.id);
+          }
+          if(result.error) throw result.error;
+        }
         if(action.type==='mute'){ const {error}=await client.rpc('moderation_set_mute',{target_user_id:message.user_id,duration_seconds:action.seconds}); if(error) throw error; }
         if(action.type==='ban'){ const {error}=await client.rpc('moderation_set_ban',{target_user_id:message.user_id,duration_seconds:action.seconds,reason:'Sohbet moderasyonu'}); if(error) throw error; }
         msgBox.textContent=action.ok; msgBox.className='auth-message success';

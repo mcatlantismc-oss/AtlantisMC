@@ -246,6 +246,8 @@
             <button class="account-menu-item" type="button" data-account="edit"><span>✏️</span><span><b>Profili Düzenle</b><small>Profil fotoğrafı ve açıklama</small></span></button>
             <button class="account-menu-item" type="button" data-account="password"><span>🔑</span><span><b>Şifre Değiştir</b><small>Hesap güvenliği</small></span></button>
             <button class="account-menu-item" type="button" data-account="email"><span>📧</span><span><b>E-posta Değiştir</b><small>Yeni adres + doğrulama kodu</small></span></button>
+            <a class="account-menu-item" href="kullanicilar.html"><span>👥</span><span><b>Kullanıcılar</b><small>Topluluk profillerini keşfet</small></span></a>
+            <a class="account-menu-item" href="engellenenler.html"><span>🚫</span><span><b>Engellenenler</b><small>Engellediğin kullanıcıları yönet</small></span></a>
             ${(role === 'admin' || role === 'moderator') ? '<a class="account-menu-item" href="moderasyon.html"><span>🛡️</span><span><b>Moderasyon</b><small>Yönetim paneli</small></span></a>' : ''}
             <a class="account-menu-item" href="sohbet.html"><span>💬</span><span><b>Sohbete Git</b><small>Canlı Atlantis sohbeti</small></span></a>
             <div class="account-drawer-separator"></div>

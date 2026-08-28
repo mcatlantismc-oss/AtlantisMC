@@ -1604,3 +1604,32 @@ body.atlantis-page-ready{animation:none!important}
   .logout-confirm-card{grid-template-columns:48px 1fr;padding:14px}
   .logout-confirm-icon{width:48px;height:48px;border-radius:14px;font-size:25px}
 }
+
+/* AtlantisMC community user pages */
+.users-toolbar{display:flex;gap:12px;margin:0 0 20px}
+.users-search{width:100%;min-height:48px;border:1px solid var(--line);border-radius:14px;background:rgba(6,20,36,.72);color:var(--text);padding:12px 16px;font:600 1rem 'Mukta',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s,transform .2s}
+.users-search:focus{border-color:var(--line-strong);box-shadow:0 0 0 4px rgba(88,199,255,.08)}
+.community-user-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.community-user-card{width:100%;display:flex;align-items:center;gap:14px;text-align:left;border:1px solid var(--line);border-radius:18px;padding:16px;background:linear-gradient(180deg,rgba(10,31,52,.88),rgba(5,18,32,.92));color:var(--text);cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.community-user-card:hover,.community-user-card:focus-visible{transform:translateY(-2px);border-color:var(--line-strong);background:linear-gradient(180deg,rgba(12,38,64,.94),rgba(6,22,39,.96));box-shadow:0 12px 30px rgba(0,0,0,.18);outline:none}
+.community-user-card.is-blocked{cursor:default}
+.community-avatar{flex:0 0 52px;width:52px;height:52px;border-radius:16px;overflow:hidden;display:grid;place-items:center;border:1px solid var(--line-strong);background:rgba(88,199,255,.08);color:var(--accent2);font:800 1.2rem 'Cinzel',serif}
+.community-avatar img{width:100%;height:100%;display:block;object-fit:cover}
+.community-user-copy{min-width:0;display:flex;flex:1;flex-direction:column;gap:5px}
+.community-user-copy strong{font:800 1.03rem/1.1 'Mukta',sans-serif;color:var(--accent2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.community-user-copy small{color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.community-user-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.community-user-actions .secondary-button,.community-user-actions .danger-button{min-height:40px;padding:9px 13px}
+.blocked-empty{padding:18px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center}
+.account-drawer-body .account-menu-item[href="kullanicilar.html"],
+.account-drawer-body .account-menu-item[href="engellenenler.html"]{border-color:rgba(88,199,255,.13)}
+@media (max-width:760px){
+  .community-user-grid{grid-template-columns:1fr}
+  .community-user-card{padding:14px}
+  .community-user-actions{width:100%;justify-content:stretch}
+  .community-user-actions .secondary-button,.community-user-actions .danger-button{flex:1}
+}
+@media (prefers-reduced-motion:reduce){
+  .community-user-card,.users-search{transition:none!important}
+  .community-user-card:hover,.community-user-card:focus-visible{transform:none}
+}
