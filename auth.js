@@ -16,6 +16,9 @@
   const RECOVERY_EDGE = String(window.ATLANTIS_RECOVERY_URL || '').replace(/\/+$/, '');
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const NAME_RE = /^[A-Za-zÇĞİÖŞÜçğıöşü][A-Za-zÇĞİÖŞÜçğıöşü0-9]{2,15}$/;
+  const TURNSTILE_SITE_KEY = '0x4AAAAAAEe6UGZlIX51p6gC';
+  let turnstileReadyPromise = null;
+  const turnstileWidgets = new Map();
 
   let client = null;
   let sessionUser = null;
@@ -920,6 +923,82 @@
     }
   }
 
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    if (turnstileReadyPromise) return turnstileReadyPromise;
+
+    turnstileReadyPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-atlantis-turnstile]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.turnstile), { once: true });
+        existing.addEventListener('error', reject, { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.atlantisTurnstile = '1';
+      script.onload = () => resolve(window.turnstile);
+      script.onerror = () => reject(new Error('Turnstile yüklenemedi.'));
+      document.head.appendChild(script);
+    });
+
+    return turnstileReadyPromise;
+  }
+
+  async function mountTurnstile(container) {
+    if (!container || !TURNSTILE_SITE_KEY) return null;
+
+    const existingId = turnstileWidgets.get(container.id);
+    if (existingId && window.turnstile) {
+      return existingId;
+    }
+
+    try {
+      const ts = await loadTurnstile();
+      const id = ts.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: 'dark',
+        size: 'flexible',
+        callback: () => {},
+        'expired-callback': () => {},
+        'timeout-callback': () => {}
+      });
+      turnstileWidgets.set(container.id, id);
+      return id;
+    } catch (error) {
+      console.warn('[Atlantis Auth] Turnstile:', error);
+      return null;
+    }
+  }
+
+  async function getCaptchaToken(formId) {
+    const form = document.getElementById(formId);
+    const box = form?.querySelector('.atlantis-turnstile');
+    if (!box) return null;
+
+    const widgetId = await mountTurnstile(box);
+    if (widgetId == null || !window.turnstile) return null;
+
+    const token = window.turnstile.getResponse(widgetId);
+    if (!token) {
+      setAuthMessage('Lütfen güvenlik doğrulamasını tamamla.', 'error');
+      return null;
+    }
+    return token;
+  }
+
+  function resetCaptcha(formId) {
+    const box = document.getElementById(formId)?.querySelector('.atlantis-turnstile');
+    if (!box || !window.turnstile) return;
+    const id = turnstileWidgets.get(box.id);
+    if (id != null) {
+      try { window.turnstile.reset(id); } catch {}
+    }
+  }
+
   function ensureAuthModal() {
     if (document.getElementById('auth-modal')) return;
 
@@ -947,6 +1026,9 @@
           <label>Şifre
             <input name="password" type="password" autocomplete="current-password" required placeholder="Şifren">
           </label>
+          <div class="atlantis-turnstile-wrap">
+            <div id="turnstile-login" class="atlantis-turnstile" aria-label="Güvenlik doğrulaması"></div>
+          </div>
           <button class="primary-button wide" type="submit">Giriş Yap</button>
           <button class="google-button" id="google-login" type="button"><b>G</b> Google ile giriş yap</button>
           <button class="link-button" id="forgot-password" type="button">Şifremi unuttum</button>
@@ -963,6 +1045,9 @@
             <input id="signup-password" name="password" type="password" minlength="8" required placeholder="Güçlü bir şifre oluştur">
           </label>
           ${makePasswordMeter('signup-password-strength')}
+          <div class="atlantis-turnstile-wrap">
+            <div id="turnstile-signup" class="atlantis-turnstile" aria-label="Güvenlik doğrulaması"></div>
+          </div>
           <button class="primary-button wide" type="submit">Kayıt Ol</button>
           <button class="google-button" id="google-signup" type="button"><b>G</b> Google ile kayıt ol</button>
         </form>
@@ -999,6 +1084,9 @@
             <small class="form-help">Kod e-posta adresine gönderildi. 10 dakika içinde kullan.</small>
           </div>
 
+          <div class="atlantis-turnstile-wrap">
+            <div id="turnstile-forgot" class="atlantis-turnstile" aria-label="Güvenlik doğrulaması"></div>
+          </div>
           <button class="primary-button wide" id="recovery-action" type="submit">6 Haneli Kod Gönder</button>
           <button class="link-button" type="button" data-back-login>Girişe dön</button>
         </form>
@@ -1019,6 +1107,12 @@
     `;
 
     document.body.appendChild(modal);
+
+    loadTurnstile().then(() => {
+      ['turnstile-login','turnstile-signup','turnstile-forgot'].forEach(id => {
+        mountTurnstile(document.getElementById(id));
+      });
+    }).catch(error => console.warn('[Atlantis Auth] Turnstile init:', error));
 
     // Password visibility controls for every password field in the auth modal.
     modal.querySelectorAll('input[type="password"]').forEach(input => {
@@ -1122,10 +1216,15 @@
 
     try {
       if (EMAIL_RE.test(identifier)) {
+        const captchaToken = await getCaptchaToken('auth-login-form');
+        if (!captchaToken) return;
         const { data, error } = await client.auth.signInWithPassword({
-          email: identifier.toLowerCase(), password
+          email: identifier.toLowerCase(),
+          password,
+          options: { captchaToken }
         });
         if (error) throw new Error('E-posta veya şifre hatalı.');
+        resetCaptcha('auth-login-form');
         await finishLogin(data.session);
         return;
       }
@@ -1167,10 +1266,14 @@
       const { data: taken } = await client.from('profiles').select('id').ilike('username', username).maybeSingle();
       if (taken) throw new Error('Bu kullanıcı adı zaten kullanılıyor.');
 
+      const captchaToken = await getCaptchaToken('auth-signup-form');
+      if (!captchaToken) return;
+
       const { data, error } = await client.auth.signUp({
         email, password, options:{
           data:{username},
-          emailRedirectTo:window.location.origin + window.location.pathname
+          emailRedirectTo:window.location.origin + window.location.pathname,
+          captchaToken
         }
       });
       if (error) throw error;
@@ -1181,6 +1284,7 @@
         await client.rpc('set_my_username',{new_username:username});
         await finishLogin(data.session);
       } else {
+        resetCaptcha('auth-signup-form');
         showAuthForm('signup-verify');
         setAuthMessage('6 haneli doğrulama kodu e-posta adresine gönderildi.', 'success');
         setTimeout(() => document.querySelector('#auth-signup-verify-form [name="code"]')?.focus(), 50);
@@ -1272,12 +1376,17 @@
           const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result.error || 'Doğrulama kodu gönderilemedi.');
         } else {
+          const captchaToken = await getCaptchaToken('auth-forgot-form');
+          if (!captchaToken) return;
+
           const { error } = await client.auth.resetPasswordForEmail(email, {
-            redirectTo:window.location.origin + window.location.pathname
+            redirectTo:window.location.origin + window.location.pathname,
+            captchaToken
           });
           if (error) throw error;
         }
 
+        resetCaptcha('auth-forgot-form');
         codeWrap.hidden = false;
         codeInput.required = true;
         action.textContent = 'Kodu Doğrula';

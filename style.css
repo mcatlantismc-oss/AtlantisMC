@@ -1669,3 +1669,23 @@ body.atlantis-page-ready{animation:none!important}
     flex: 1 1 140px;
   }
 }
+
+
+/* AtlantisMC — Cloudflare Turnstile */
+.atlantis-turnstile-wrap{
+  display:flex;
+  justify-content:center;
+  width:100%;
+  margin:4px 0 10px;
+}
+.atlantis-turnstile{
+  width:100%;
+  min-height:65px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.atlantis-turnstile iframe{
+  max-width:100%;
+  border-radius:10px;
+}
