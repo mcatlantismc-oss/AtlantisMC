@@ -29,6 +29,8 @@
   let typingTimer = null;
   let lastTypingSent = 0;
   let presenceHeartbeat = null;
+  let muteCountdownTimer = null;
+  let profileRefreshTimer = null;
   const profileCache = new Map();
   let blockedUsers = new Set();
   let blockedUserIds = new Set();
@@ -67,6 +69,8 @@
     bindAuthEvents();
     setupComposer();
     updateComposer();
+    startMuteClock();
+    startProfileRefresh();
     await syncMessages({initial:true});
     subscribeChat();
     subscribePresence();
@@ -104,6 +108,8 @@
       subscribeChat();
       subscribePresence();
       touchLastSeen();
+      startMuteClock();
+      startProfileRefresh();
       updateComposer();
     });
 
@@ -114,6 +120,8 @@
       profileCache.clear();
       blockedUsers.clear();
       blockedUserIds.clear();
+      clearInterval(muteCountdownTimer); muteCountdownTimer = null;
+      clearInterval(profileRefreshTimer); profileRefreshTimer = null;
       try { if (chatChannel) await client.removeChannel(chatChannel); } catch {}
       try { if (presenceChannel) await client.removeChannel(presenceChannel); } catch {}
       chatChannel = null;
@@ -529,6 +537,59 @@
     },60_000);
   }
 
+  function formatRemaining(seconds) {
+    const total = Math.max(0, Math.ceil(Number(seconds) || 0));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (days > 0) return `${days} gün ${hours} saat ${minutes} dk ${secs} sn`;
+    if (hours > 0) return `${hours} saat ${minutes} dk ${secs} sn`;
+    if (minutes > 0) return `${minutes} dk ${secs} sn`;
+    return `${secs} sn`;
+  }
+
+  function getMuteRemainingSeconds() {
+    const until = currentProfile?.muted_until
+      ? new Date(currentProfile.muted_until).getTime()
+      : 0;
+    if (!until || Number.isNaN(until)) return 0;
+    return Math.max(0, (until - Date.now()) / 1000);
+  }
+
+  function startMuteClock() {
+    clearInterval(muteCountdownTimer);
+    muteCountdownTimer = setInterval(() => {
+      updateComposer();
+    }, 1000);
+    updateComposer();
+  }
+
+  async function refreshOwnProfileState() {
+    if (!client || !currentUser) return;
+    try {
+      const { data, error } = await withTimeout(
+        client.from('profiles')
+          .select('id,username,avatar_url,bio,site_role,muted_until,last_seen,created_at,updated_at')
+          .eq('id', currentUser.id)
+          .maybeSingle(),
+        5000,
+        'Profil yenileme zaman aşımına uğradı.'
+      );
+      if (!error && data) {
+        currentProfile = data;
+        profileCache.set(data.id, data);
+        updateComposer();
+      }
+    } catch {}
+  }
+
+  function startProfileRefresh() {
+    clearInterval(profileRefreshTimer);
+    if (!currentUser) return;
+    profileRefreshTimer = setInterval(refreshOwnProfileState, 5000);
+  }
+
   function setupComposer() {
     const form = document.getElementById('chat-form');
     const input = document.getElementById('chat-input');
@@ -565,14 +626,10 @@
 
       try {
         let result;
-        if (currentUser) {
-          result = await client.rpc('send_chat_message',{p_message:text});
-        } else {
-          result = await client.rpc('send_anonymous_chat_message',{p_message:text});
-          if (result.error && String(result.error.message || '').toLowerCase().includes('schema cache')) {
-            result = await client.from('messages').insert({user_id:null,username:'Anonim',message:text,avatar_url:null}).select('id,user_id,username,message,created_at,edited_at,avatar_url').single();
-          }
+        if (!currentUser) {
+          throw new Error('Mesaj yazabilmek için giriş yapmalısın!');
         }
+        result = await client.rpc('send_chat_message',{p_message:text});
         if (result.error) throw result.error;
 
         input.value = '';
@@ -603,8 +660,9 @@
   }
 
   function canWriteToChat() {
+    if (!currentUser) return false;
     if (!chatLocked) return true;
-    return ['admin','moderator'].includes(String(currentProfile?.site_role || ''));
+    return ['admin','moderator'].includes(String(currentProfile?.site_role || '').trim().toLowerCase());
   }
 
   function updateComposer() {
@@ -613,35 +671,61 @@
     const form = document.getElementById('chat-form');
     if (!input) return;
 
-    const muted = currentProfile?.muted_until && new Date(currentProfile.muted_until) > new Date();
-    const lockedForUser = chatLocked && !['admin','moderator'].includes(String(currentProfile?.site_role || ''));
-    const disabled = !!muted || !!lockedForUser;
+    const role = String(currentProfile?.site_role || '').trim().toLowerCase();
+    const muteRemaining = getMuteRemainingSeconds();
+    const muted = muteRemaining > 0;
+    const lockedForUser = !!chatLocked && !['admin','moderator'].includes(role);
+    const anonymous = !currentUser;
+    const disabled = anonymous || muted || lockedForUser;
 
     input.disabled = disabled;
     if (button && !button.classList.contains('is-sending')) button.disabled = disabled;
-    input.placeholder = muted
-      ? 'Sohbet kullanımın geçici olarak kısıtlandı.'
-      : lockedForUser
-        ? 'Sohbet kilitli — yalnızca moderatörler ve yöneticiler yazabilir.'
-        : currentUser ? 'Mesajını yaz…' : 'Anonim olarak mesajını yaz…';
+
+    if (anonymous) {
+      input.placeholder = 'Mesaj yazabilmek için giriş yapmalısın!';
+    } else if (muted) {
+      input.placeholder = `Geçici olarak susturuldun — ${formatRemaining(muteRemaining)} kaldı.`;
+    } else if (lockedForUser) {
+      input.placeholder = 'Sohbet kilitli — yalnızca moderatörler ve yöneticiler yazabilir.';
+    } else {
+      input.placeholder = 'Mesajını yaz…';
+    }
 
     if (form) {
       form.setAttribute('aria-disabled', String(disabled));
-      form.classList.toggle('chat-form-locked', !!lockedForUser);
+      form.classList.toggle('chat-form-locked', !!(lockedForUser || anonymous || muted));
+
       let status = document.getElementById('chat-lock-status');
-      if (lockedForUser) {
+      const statusText = anonymous
+        ? '🔒 Mesaj göndermek için giriş yapmalısın.'
+        : muted
+          ? `🔇 Geçici olarak susturuldun — ${formatRemaining(muteRemaining)} kaldı.`
+          : lockedForUser
+            ? '🔒 Sohbet kilitli — yalnızca moderatörler ve yöneticiler mesaj gönderebilir.'
+            : '';
+
+      if (statusText) {
         if (!status) {
           status = document.createElement('div');
           status.id = 'chat-lock-status';
           status.className = 'chat-lock-banner';
           form.parentNode?.insertBefore(status, form);
         }
-        status.textContent = '🔒 Sohbet kilitli — yalnızca moderatörler ve yöneticiler mesaj gönderebilir.';
+        status.textContent = statusText;
+        status.classList.toggle('is-muted', muted);
+        status.classList.toggle('is-anonymous', anonymous);
+        status.classList.toggle('is-locked', lockedForUser);
       } else {
         status?.remove();
       }
     }
+
+    if (muteRemaining <= 0 && currentProfile?.muted_until) {
+      // Clear an expired local timestamp so the input re-enables immediately.
+      currentProfile = {...currentProfile, muted_until:null};
+    }
   }
+
 
   async function loadChatLockState() {
     try {
@@ -1055,6 +1139,8 @@
     presenceHeartbeat = null;
     clearTimeout(typingTimer);
     typingTimer = null;
+    clearInterval(muteCountdownTimer); muteCountdownTimer = null;
+    clearInterval(profileRefreshTimer); profileRefreshTimer = null;
     initialized = false;
     initialLoaded = false;
   }

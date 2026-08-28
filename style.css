@@ -1243,3 +1243,56 @@ body.atlantis-page-ready{animation:none!important}
   .atlantis-social-mute-row{grid-template-columns:1fr}
   .atlantis-social-mute-row .atlantis-social-small{width:100%}
 }
+
+/* ===== AtlantisMC premium motion pass =====
+   Only opacity/transform animations; no layout-heavy effects. */
+.reveal{
+  will-change:auto;
+  opacity:0;
+  transform:translate3d(0,14px,0) scale(.992);
+  transition:opacity .46s cubic-bezier(.22,.8,.22,1), transform .46s cubic-bezier(.22,.8,.22,1);
+}
+.reveal.in-view{
+  opacity:1;
+  transform:none;
+  animation:none!important;
+}
+.reveal:not(.in-view){
+  will-change:opacity,transform;
+}
+@media (prefers-reduced-motion: reduce){
+  .reveal,.reveal.in-view{
+    opacity:1!important;
+    transform:none!important;
+    transition:none!important;
+    animation:none!important;
+    will-change:auto!important;
+  }
+}
+@media (max-width:760px){
+  .reveal{
+    transform:translate3d(0,12px,0) scale(.994);
+    transition-duration:.40s;
+  }
+}
+.chat-lock-banner{
+  transition:opacity .2s ease,transform .2s ease;
+}
+.chat-lock-banner.is-muted{
+  border-color:rgba(255,116,116,.28);
+  background:rgba(255,116,116,.08);
+  color:#ffd0d0;
+}
+.chat-lock-banner.is-anonymous{
+  border-color:rgba(127,216,255,.2);
+  background:rgba(88,199,255,.07);
+  color:#c9f3ff;
+}
+.chat-lock-banner.is-locked{
+  border-color:rgba(255,198,88,.22);
+  background:rgba(255,198,88,.07);
+  color:#ffe1a0;
+}
+.chat-form:has(input:disabled) .primary-button{
+  cursor:not-allowed;
+}
