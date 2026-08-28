@@ -97,6 +97,37 @@
   }
 
 
+  async function resolveIdentityRobustly() {
+    const started = Date.now();
+    while (Date.now() - started < 9000) {
+      const shellUser = window.atlantisAuthSession?.user || null;
+      const shellProfile = window.atlantisCurrentProfile?.id ? {
+        ...window.atlantisCurrentProfile,
+        site_role: String(window.atlantisCurrentProfile.site_role || '').trim().toLowerCase()
+      } : null;
+      if (shellUser && shellProfile?.site_role) {
+        return {user:shellUser, profile:shellProfile};
+      }
+
+      try {
+        const {data:{session} = {}} = await withTimeout(client.auth.getSession(),2500,'Oturum bilgisi alınamadı.');
+        const user = session?.user || null;
+        if (user) {
+          const directProfile = await selectOwnProfile(user.id);
+          const profile = directProfile?.data || null;
+          if (profile?.site_role) return {user, profile};
+          if (window.atlantisCurrentProfile?.id === user.id && window.atlantisCurrentProfile?.site_role) {
+            return {user, profile:window.atlantisCurrentProfile};
+          }
+        }
+      } catch (error) {
+        console.warn('[Atlantis Moderation] identity retry:', error);
+      }
+      await new Promise(resolve => setTimeout(resolve,180));
+    }
+    return null;
+  }
+
   async function selectOwnProfile(userId) {
     if (!client || !userId) return {data:null,error:new Error('Profil bağlantısı hazır değil.')};
 
@@ -154,7 +185,7 @@
     client = await getClient();
     if (!client) return showDenied('Supabase bağlantısı kurulamadı.');
 
-    const identity = await waitForAuthenticatedIdentity();
+    const identity = await resolveIdentityRobustly();
     me = identity?.user || null;
     if (!me) return showDenied('Bu paneli görmek için giriş yapmalısın.');
 
@@ -177,7 +208,7 @@
     if (roleEl) roleEl.textContent = resolvedProfile.site_role === 'admin' ? 'Kurucu' : 'Moderatör';
 
     bindControls();
-    await Promise.all([loadMessages(), loadUsers(), loadChatLock()]);
+    await Promise.all([loadUsers(), loadChatLock()]);
   }
 
   function showDenied(text) {
@@ -192,7 +223,7 @@
 
   function bindControls() {
     document.getElementById('mod-refresh')?.addEventListener('click', () =>
-      Promise.all([loadMessages(), loadUsers(), loadChatLock()])
+      Promise.all([loadUsers(), loadChatLock()])
     );
     document.getElementById('mod-chat-lock')?.addEventListener('click', toggleChatLock);
     document.getElementById('mod-chat-clear')?.addEventListener('click', clearChat);
@@ -223,24 +254,89 @@
     await loadChatLock();
   }
 
+  function openModerationClearConfirm(onConfirm) {
+    document.getElementById('mod-clear-confirm')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'mod-clear-confirm';
+    overlay.className = 'chat-action-modal';
+    overlay.innerHTML = `
+      <div class="chat-action-backdrop"></div>
+      <section class="chat-action-dialog mod-clear-dialog" role="dialog" aria-modal="true" aria-label="Sohbeti Temizle">
+        <button type="button" class="chat-action-close" aria-label="Kapat">×</button>
+        <div class="chat-action-icon">💬</div>
+        <span class="section-label">ATLANTİS SOHBETİ</span>
+        <h2>SOHBETİ TEMİZLE</h2>
+        <p>Bu işlem sohbet geçmişindeki tüm mesajları kalıcı olarak kaldırır.</p>
+        <div class="chat-action-content">
+          <div class="chat-clear-warning">
+            <div class="chat-clear-warning-icon">!</div>
+            <div>
+              <strong>Tüm sohbet geçmişi silinecek.</strong>
+              <p>Bu işlem geri alınamaz. Sohbeti temizlemek istediğine emin misin?</p>
+            </div>
+          </div>
+          <div class="chat-delete-actions">
+            <button type="button" class="secondary-button" data-mod-clear-cancel>Vazgeç</button>
+            <button type="button" class="danger-button chat-clear-confirm" data-mod-clear-confirm>Temizle</button>
+          </div>
+          <div class="auth-message" data-mod-clear-error></div>
+        </div>
+      </section>`;
+    document.body.appendChild(overlay);
+    const close=()=>overlay.remove();
+    overlay.querySelector('.chat-action-close').onclick=close;
+    overlay.querySelector('.chat-action-backdrop').onclick=close;
+    overlay.querySelector('[data-mod-clear-cancel]').onclick=close;
+    overlay.querySelector('[data-mod-clear-confirm]').onclick=async event=>{
+      const btn=event.currentTarget;
+      btn.disabled=true; btn.textContent='Temizleniyor…';
+      try { await onConfirm(); close(); }
+      catch(error){
+        btn.disabled=false; btn.textContent='Temizle';
+        const box=overlay.querySelector('[data-mod-clear-error]');
+        box.textContent=error?.message || 'Sohbet temizlenemedi.';
+        box.className='auth-message error';
+      }
+    };
+    return overlay;
+  }
+
+  async function clearMessagesViaRpcOrFilteredDelete() {
+    const rpc = await client.rpc('moderation_clear_chat');
+    if (!rpc.error) return Number(rpc.data) || 0;
+
+    // Fallback for projects where the previous RPC still contains
+    // an unsafe DELETE without a WHERE clause.
+    const fallback = await client.from('messages')
+      .delete()
+      .not('id','is',null)
+      .select('id');
+    if (fallback.error) throw rpc.error;
+    return Array.isArray(fallback.data) ? fallback.data.length : 0;
+  }
+
   async function clearChat() {
-    const button = document.getElementById('mod-chat-clear');
-    if (!button) return;
-    if (!confirm('Sohbetteki tüm mesajlar silinsin mi? Bu işlem geri alınamaz.')) return;
-    const old = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Temizleniyor…';
-    try {
-      const { data, error } = await client.rpc('moderation_clear_chat');
-      if (error) throw error;
-      await loadMessages();
-      alert(`${Number(data || 0)} mesaj temizlendi.`);
-    } catch (error) {
-      alert(error?.message || 'Sohbet temizlenemedi.');
-    } finally {
-      button.disabled = false;
-      button.textContent = old;
+    const role = String(myProfile?.site_role || '').trim().toLowerCase();
+    if (!me || !['admin','moderator'].includes(role) || !client) {
+      return;
     }
+
+    const button = document.getElementById('mod-chat-clear');
+    if (!button || button.disabled) return;
+
+    openModerationClearConfirm(async () => {
+      const old = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Temizleniyor…';
+      try {
+        const count = await clearMessagesViaRpcOrFilteredDelete();
+        await loadUsers();
+        return count;
+      } finally {
+        button.disabled = false;
+        button.textContent = old;
+      }
+    });
   }
 
   const targetRoleCache = new Map();
@@ -264,71 +360,6 @@
     if (!targetRole) return false;
     return actorRole === 'admin' || targetRole === 'user';
   }
-
-  async function loadMessages() {
-    const box = document.getElementById('mod-messages');
-    if (!box) return;
-    box.innerHTML = '<div class="empty-panel">Mesajlar yükleniyor...</div>';
-
-    const {data,error} = await client.from('messages')
-      .select('id,user_id,username,message,created_at,edited_at,avatar_url')
-      .order('created_at',{ascending:false}).limit(150);
-
-    if (error) {
-      box.innerHTML = `<div class="empty-panel">Mesajlar alınamadı: ${esc(error.message)}</div>`;
-      return;
-    }
-
-    const ids = [...new Set((data || []).map(m => m.user_id).filter(Boolean))];
-    if (ids.length) {
-      const {data:profiles} = await client.from('profiles').select('id,site_role').in('id',ids);
-      (profiles || []).forEach(p => targetRoleCache.set(p.id,String(p.site_role || 'user').trim().toLowerCase()));
-    }
-
-    box.innerHTML = '';
-    if (!data?.length) {
-      box.innerHTML = '<div class="empty-panel">Henüz mesaj yok.</div>';
-      return;
-    }
-
-    for (const msg of data) {
-      const allowed = await canDeleteMessage(msg);
-      const targetRole = msg.user_id ? (await getTargetRole(msg.user_id) || 'user') : 'user';
-      const row = document.createElement('article');
-      row.className = 'mod-item reveal';
-      row.dataset.messageId = msg.id;
-      row.innerHTML = `
-        <div class="mod-main">
-          <div class="mod-meta">
-            <strong>${esc(msg.username || 'Anonim')}</strong>
-            ${msg.user_id ? `<span class="chat-guest-badge">${esc(roleText(targetRole))}</span>` : '<span class="chat-guest-badge">Misafir</span>'}
-            <time>${esc(formatDate(msg.created_at))}</time>
-          </div>
-          <p>${esc(msg.message)}</p>
-        </div>
-        <div class="mod-actions">
-          ${allowed ? '<button class="danger-button" type="button" data-delete-message>Mesajı Sil</button>' : '<span class="state-pill">Bu mesajı silme yetkin yok</span>'}
-        </div>`;
-
-      row.querySelector('[data-delete-message]')?.addEventListener('click', async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        try {
-          const {error:delError} = await client.rpc('moderation_delete_message',{target_message_id:msg.id});
-          if (delError) throw delError;
-          row.classList.add('chat-message-out');
-          setTimeout(()=>row.remove(),180);
-        } catch(error) {
-          button.disabled = false;
-          alert(error?.message || 'Mesaj silinemedi.');
-        }
-      });
-
-      box.appendChild(row);
-      requestAnimationFrame(() => row.classList.add('in-view'));
-    }
-  }
-
 
   async function loadUsers() {
     const box = document.getElementById('mod-users');

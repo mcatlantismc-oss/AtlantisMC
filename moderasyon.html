@@ -21,10 +21,28 @@
 <section id="moderation-loading" class="panel reveal"><div class="moderation-loading">Yetki kontrol ediliyor...</div></section>
 <section id="moderation-denied" class="panel moderation-denied" hidden><h2>Erişim yok</h2><p data-denied-text></p><a class="primary-button wide" href="index.html">Ana Sayfaya Dön</a></section>
 <section id="moderation-app" hidden>
-<div class="panel reveal moderation-control-bar"><div><span class="section-label">CANLI SOHBET</span><h2>Sohbet Kontrolü</h2><span id="mod-chat-lock-state" class="mod-lock-state">Durum okunuyor...</span></div><div class="mod-control-actions"><button id="mod-chat-lock" class="danger-button" type="button">Sohbeti Kilitle</button><button id="mod-chat-clear" class="danger-button" type="button">Sohbeti Temizle</button></div></div>
-<div class="moderation-grid">
-<div class="panel reveal"><div class="panel-head"><div><span class="section-label">SOHBET</span><h2>Mesajlar</h2><span class="mod-role" id="mod-role"></span></div><button id="mod-refresh" class="secondary-button" type="button">↻ Yenile</button></div><div id="mod-messages" class="mod-list"></div></div>
-<div class="panel reveal"><div class="panel-head"><div><span class="section-label">TOPLULUK</span><h2>Kullanıcılar</h2></div></div><div id="mod-users" class="mod-list"></div></div>
+<div class="panel reveal moderation-control-bar">
+  <div class="moderation-control-copy">
+    <span class="section-label">CANLI SOHBET</span>
+    <h2>Sohbet Kontrolü</h2>
+    <span id="mod-chat-lock-state" class="mod-lock-state">Durum okunuyor...</span>
+  </div>
+  <div class="mod-control-actions moderation-chat-actions">
+    <button id="mod-chat-lock" class="danger-button mod-lock-button" type="button">Sohbeti Kilitle</button>
+    <button id="mod-chat-clear" class="danger-button mod-clear-button" type="button">Sohbeti Temizle</button>
+  </div>
+</div>
+
+<div class="panel reveal moderation-users-panel">
+  <div class="panel-head">
+    <div>
+      <span class="section-label">TOPLULUK</span>
+      <h2>Kullanıcılar</h2>
+      <span class="mod-role" id="mod-role"></span>
+    </div>
+    <button id="mod-refresh" class="secondary-button" type="button">↻ Yenile</button>
+  </div>
+  <div id="mod-users" class="mod-list"></div>
 </div>
 </section>
 </main><footer class="site-footer">© 2026 Atlantis MC — Tüm hakları saklıdır.</footer>

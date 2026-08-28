@@ -1139,11 +1139,20 @@
       button.disabled = true;
       button.textContent = 'Temizleniyor…';
       try {
-        const {data,error} = await client.rpc('moderation_clear_chat');
-        if (error) throw error;
+        let count = 0;
+        const rpc = await client.rpc('moderation_clear_chat');
+        if (!rpc.error) {
+          count = Number(rpc.data) || 0;
+        } else {
+          const fallback = await client.from('messages')
+            .delete()
+            .not('id','is',null)
+            .select('id');
+          if (fallback.error) throw rpc.error;
+          count = Array.isArray(fallback.data) ? fallback.data.length : 0;
+        }
         await syncMessages({initial:false});
-        const count = Number(data);
-        toast(Number.isFinite(count) ? `${count} mesaj temizlendi.` : 'Sohbet temizlendi.','success');
+        toast(`${count} mesaj temizlendi.`,'success');
       } finally {
         button.disabled = false;
         button.textContent = originalText;
