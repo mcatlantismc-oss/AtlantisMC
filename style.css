@@ -1633,3 +1633,39 @@ body.atlantis-page-ready{animation:none!important}
   .community-user-card,.users-search{transition:none!important}
   .community-user-card:hover,.community-user-card:focus-visible{transform:none}
 }
+
+
+/* AtlantisMC — Users / Blocked users profile interactions */
+.community-user-card[data-user-id] {
+  position: relative;
+  isolation: isolate;
+}
+
+.community-user-card[data-user-id]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.community-user-card .community-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.community-user-card.is-blocked {
+  border-color: rgba(255, 116, 116, .20);
+}
+
+@media (max-width: 720px) {
+  .community-user-card .community-user-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .community-user-card .community-user-actions .secondary-button,
+  .community-user-card .community-user-actions .danger-button {
+    flex: 1 1 140px;
+  }
+}

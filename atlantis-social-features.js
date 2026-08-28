@@ -326,22 +326,38 @@
   }
 
   async function openFromTarget(target) {
-    const userId = target.closest('[data-user-id]')?.dataset.userId ||
+    const userTarget = target.closest('[data-user-id]');
+    const userId = userTarget?.dataset.userId ||
                    target.closest('.chat-message')?.dataset.userId;
     if (!userId) return;
 
     const client = await getClient();
     if (!client) return;
-    const me = await getCurrentUser(client);
-    if (!me || me.id === userId) return;
 
-    const name = target.closest('.chat-message')?.dataset.username || 'Oyuncu';
+    const me = await getCurrentUser(client);
+    if (!me) {
+      toast('Profilleri görmek için giriş yapmalısın.');
+      return;
+    }
+
+    const name =
+      userTarget?.dataset.username ||
+      target.closest('.chat-message')?.dataset.username ||
+      userTarget?.querySelector('.community-user-copy strong')?.textContent ||
+      'Oyuncu';
+
     try {
       const [profile, state] = await Promise.all([
         fetchProfile(client, userId, name),
         getState(client, me, userId)
       ]);
-      profile._myRole = String(window.atlantisCurrentProfile?.site_role || window.atlantisAuthSession?.profile?.site_role || 'user');
+
+      profile._myRole = String(
+        window.atlantisCurrentProfile?.site_role ||
+        window.atlantisAuthSession?.profile?.site_role ||
+        'user'
+      );
+
       renderOverlay(profile, state, me, client);
     } catch (error) {
       toast('Profil bilgileri alınamadı.');
@@ -352,14 +368,48 @@
   // Capture-phase interception: existing chat handlers can stay unchanged.
   document.addEventListener('click', (event) => {
     const avatar = event.target.closest('.chat-avatar-button');
-    const user = event.target.closest('.chat-user-button');
-    const target = avatar || user;
+    const chatUser = event.target.closest('.chat-user-button');
+    const communityUser = event.target.closest('.community-user-card[data-user-id]');
+    const target = avatar || chatUser || communityUser;
     if (!target) return;
-    if (target.disabled) return;
+
+    if (target.disabled || target.matches('a')) return;
+
     event.stopImmediatePropagation();
     event.preventDefault();
     openFromTarget(target);
   }, true);
+
+  // Reuse the same full-featured profile drawer from chat on the
+  // Users / Blocked Users pages.
+  window.openAtlantisSocialProfile = async (profileData) => {
+    const client = await getClient();
+    if (!client || !profileData?.id) return false;
+
+    const me = await getCurrentUser(client);
+    if (!me) {
+      toast('Profilleri görmek için giriş yapmalısın.');
+      return false;
+    }
+
+    try {
+      const fresh = await fetchProfile(client, profileData.id, profileData.username || 'Oyuncu');
+      const state = await getState(client, me, profileData.id);
+
+      fresh._myRole = String(
+        window.atlantisCurrentProfile?.site_role ||
+        window.atlantisAuthSession?.profile?.site_role ||
+        'user'
+      );
+
+      renderOverlay(fresh, state, me, client);
+      return true;
+    } catch (error) {
+      toast('Profil bilgileri alınamadı.');
+      console.error(error);
+      return false;
+    }
+  };
 
   // Render local favorite star beside chat usernames after favorite changes.
   function addStarToMessage(messageItem, favoriteIds) {
