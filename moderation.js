@@ -217,6 +217,18 @@
   function formatDate(v){ const d=new Date(v); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('tr-TR',{dateStyle:'medium',timeStyle:'short'}); }
   function formatLastSeen(v){ const d=new Date(v); if(Number.isNaN(d.getTime())) return '—'; return Date.now()-d.getTime()<300000 ? 'Çevrimiçi' : `Son görülme ${formatDate(v)}`; }
 
+  /* Re-run for the SPA-lite navigation in script.js: coming back to the
+     moderation page after visiting another page needs a fresh init since
+     the panel's DOM was replaced along with the rest of <main>. */
+  window.addEventListener('atlantis:content-swapped', event => {
+    const page = event.detail?.page;
+    if (page === 'moderation' && document.getElementById('moderation-app')) {
+      initialized = false;
+      document.body.classList.remove('mod-authorized');
+      init();
+    }
+  });
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
 })();

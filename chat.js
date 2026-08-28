@@ -965,6 +965,34 @@
 
   window.atlantisReloadChat = refreshChat;
 
+  /* Teardown for the SPA-lite navigation in script.js: when the user leaves
+     the chat page without a full reload, drop realtime channels/timers so
+     they don't keep running (and eating battery/CPU) in the background. */
+  function teardown(){
+    try { if (chatChannel) client?.removeChannel(chatChannel); } catch {}
+    try { if (presenceChannel) client?.removeChannel(presenceChannel); } catch {}
+    chatChannel = null;
+    presenceChannel = null;
+    clearInterval(presenceHeartbeat);
+    presenceHeartbeat = null;
+    clearTimeout(typingTimer);
+    typingTimer = null;
+    initialized = false;
+    initialLoaded = false;
+  }
+  window.atlantisChatTeardown = teardown;
+
+  window.addEventListener('atlantis:content-swapped', event => {
+    const page = event.detail?.page;
+    const box = document.getElementById('chat-messages');
+    if (page === 'chat' && box) {
+      teardown();
+      init();
+    } else if (chatChannel || presenceChannel || initialized) {
+      teardown();
+    }
+  });
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
 })();

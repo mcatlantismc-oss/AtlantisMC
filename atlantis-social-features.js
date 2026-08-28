@@ -314,27 +314,78 @@
     }
   }
 
-  async function refreshFavoriteStars() {
-    const client = await getClient();
-    if (!client) return;
-    const me = await getCurrentUser(client);
-    if (!me) return;
-    const { data, error } = await client.from('user_favorites')
-      .select('favorite_user_id')
-      .eq('user_id', me.id);
+  // Favorite ids are fetched once (and again only when they actually change),
+  // never re-fetched from Supabase on every incoming chat message — the old
+  // implementation queried the network and re-scanned the whole message list
+  // on every single DOM mutation of #chat-messages, which is what caused
+  // stutter during an active chat.
+  let favoriteIds = new Set();
+  let favoritesReady = false;
+  let chatObserver = null;
 
-    if (error) return;
-    const ids = new Set((data || []).map(row => String(row.favorite_user_id)));
-    document.querySelectorAll('.chat-message').forEach(item => addStarToMessage(item, ids));
+  async function loadFavoriteIds(force) {
+    if (favoritesReady && !force) return favoriteIds;
+    try {
+      const client = await getClient();
+      if (!client) return favoriteIds;
+      const me = await getCurrentUser(client);
+      if (!me) { favoriteIds = new Set(); favoritesReady = true; return favoriteIds; }
+      const { data, error } = await client.from('user_favorites')
+        .select('favorite_user_id')
+        .eq('user_id', me.id);
+      if (!error) {
+        favoriteIds = new Set((data || []).map(row => String(row.favorite_user_id)));
+        favoritesReady = true;
+      }
+    } catch (error) {
+      console.error('[Atlantis Social] favorites:', error);
+    }
+    return favoriteIds;
   }
 
-  function boot() {
-    refreshFavoriteStars().catch(() => {});
-    const observer = new MutationObserver(() => refreshFavoriteStars());
+  function applyStarsTo(nodes) {
+    nodes.forEach(node => {
+      if (node.nodeType !== 1) return;
+      if (node.classList?.contains('chat-message')) addStarToMessage(node, favoriteIds);
+    });
+  }
+
+  function watchChatMessages() {
+    chatObserver?.disconnect();
     const box = document.getElementById('chat-messages');
-    if (box) observer.observe(box, {childList:true});
-    window.addEventListener('atlantis-favorite-changed', refreshFavoriteStars);
+    if (!box) { chatObserver = null; return; }
+    // Only the newly added message nodes are touched per mutation batch —
+    // no network call and no re-scan of the whole (up to 300-row) list.
+    chatObserver = new MutationObserver(mutations => {
+      for (const mutation of mutations) {
+        if (mutation.addedNodes.length) applyStarsTo(mutation.addedNodes);
+      }
+    });
+    chatObserver.observe(box, {childList:true});
+    applyStarsTo(box.querySelectorAll('.chat-message'));
   }
+
+  async function boot() {
+    await loadFavoriteIds();
+    watchChatMessages();
+  }
+
+  window.addEventListener('atlantis-favorite-changed', async () => {
+    await loadFavoriteIds(true);
+    document.querySelectorAll('.chat-message').forEach(item => addStarToMessage(item, favoriteIds));
+  });
+
+  // Re-attach after the SPA-lite navigation in script.js swaps <main>: the
+  // old #chat-messages node (and its observer) is gone with it.
+  window.addEventListener('atlantis:content-swapped', () => {
+    if (document.getElementById('chat-messages')) {
+      document.querySelectorAll('.chat-message').forEach(item => addStarToMessage(item, favoriteIds));
+      watchChatMessages();
+    } else if (chatObserver) {
+      chatObserver.disconnect();
+      chatObserver = null;
+    }
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot, {once:true});
